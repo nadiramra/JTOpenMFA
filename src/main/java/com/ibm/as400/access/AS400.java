@@ -53,10 +53,10 @@ import com.ibm.as400.security.auth.ProfileTokenProvider;
     system.
  <p>For example:
  <pre>
- *    AS400 system = new AS400();
- *    system.connectService(AS400.DATAQUEUE);   // This causes a password prompt.
- *    ...
- *    system.connectService(AS400.FILE);        // This does not cause a prompt.
+      AS400 system = new AS400();
+      system.connectService(AS400.DATAQUEUE);   // This causes a password prompt.
+      ...
+      system.connectService(AS400.FILE);        // This does not cause a prompt.
  </pre>
  **/
 public class AS400 implements Serializable, AutoCloseable
@@ -632,6 +632,8 @@ public class AS400 implements Serializable, AutoCloseable
      @param  password  The user profile password to use to authenticate to the system.
      @param  additionalAuthenticationFactor Additional authentication factor (or null if not providing one).
      The caller is responsible for clearing the password array to keep the password from residing in memory. 
+     @throws AS400SecurityException  If a security or authority error occurs.
+     @throws IOException   If an error occurs while communicating with the system.
      **/
     public AS400(String systemName, String userId, char[] password, char[] additionalAuthenticationFactor) throws AS400SecurityException, IOException
     {
@@ -1033,6 +1035,8 @@ public class AS400 implements Serializable, AutoCloseable
         if (system.isSecure()) {
         	useSSLConnection_= new SSLOptions(system.useSSLConnection_); 
         }
+ 
+        
         mustAddLanguageLibrary_ = system.mustAddLanguageLibrary_;
         mustUseSockets_ = system.mustUseSockets_;
         mustUseNetSockets_ = system.mustUseNetSockets_;
@@ -1072,6 +1076,7 @@ public class AS400 implements Serializable, AutoCloseable
     user has not been established for this system name.
     @param  useSSL  Whether or not the new AS400 object should use secure connections when communicating with the host servers.
     @param  systemName  The name of the IBM i system.  Use <code>localhost</code> to access data locally.
+    @return AS400 object.
     **/
     public static AS400 newInstance(boolean useSSL, String systemName)
     {
@@ -1085,6 +1090,9 @@ public class AS400 implements Serializable, AutoCloseable
     @param  useSSL  Whether or not the new AS400 object should use secure connections when communicating with the host servers.
     @param  systemName  The name of the IBM i system.  Use <code>localhost</code> to access data locally.
     @param  userId  The user profile name to use to authenticate to the system.  If running on IBM i, *CURRENT may be used to specify the current user ID.
+    @return AS400 object.
+    @throws IOException   If an error occurs while communicating with the system.
+    @throws AS400SecurityException  If a security or authority error occurs.
     **/
     public static AS400 newInstance(boolean useSSL, String systemName, String userId) throws IOException, AS400SecurityException
     {
@@ -1101,6 +1109,9 @@ public class AS400 implements Serializable, AutoCloseable
     @param  password  The user profile password to use to authenticate to the system.
             The caller is responsible for clearing the password array to keep the password from residing in memory. 
     @param  additionalAuthenticationFactor Additional authentication factor (or null if not providing one).
+    @return AS400 object.
+    @throws IOException   If an error occurs while communicating with the system.
+    @throws AS400SecurityException  If a security or authority error occurs.
     **/
     public static AS400 newInstance(boolean useSSL, String systemName, String userId, char[] password, char[] additionalAuthenticationFactor) throws IOException, AS400SecurityException
     {
@@ -1116,6 +1127,7 @@ public class AS400 implements Serializable, AutoCloseable
     @param  userId  The user profile name to use to authenticate to the system.  If running on IBM i, *CURRENT may be used to specify the current user ID.
     @param  password  The user profile password to use to authenticate to the system.   The caller is responsible fore clearing sensitive data from password after the constructor runs.
     @param  proxyServer  The name and port of the proxy server in the format <code>serverName[:port]</code>.  If no port is specified, a default will be used.
+    @return AS400 object.
     **/
     public static AS400 newInstance(boolean useSSL, String systemName, String userId, char[] password, String proxyServer)
     {
@@ -1128,6 +1140,7 @@ public class AS400 implements Serializable, AutoCloseable
     @param  useSSL  Whether or not the new AS400 object should use secure connections when communicating with the host servers.
     @param  systemName  The name of the IBM i system.  Use <code>localhost</code> to access data locally.
     @param  profileToken  The profile token to use to authenticate to the system.
+    @return AS400 object.
     **/
     public static AS400 newInstance(boolean useSSL, String systemName, ProfileTokenCredential profileToken)   
     {
@@ -1140,6 +1153,7 @@ public class AS400 implements Serializable, AutoCloseable
     The new object has the same behavior, but results in a new set of socket connections.
     @param  useSSL  Whether or not the new AS400 object should use secure connections when communicating with the host server.
     @param  system  A previously instantiated AS400 object.
+    @return AS400 object.
     **/    
     public static AS400 newInstance(boolean useSSL, AS400 system)   
     {
@@ -1463,7 +1477,8 @@ public class AS400 implements Serializable, AutoCloseable
     }
 
     /**
-     Indicates if this AS400 object is enabled to exploit Toolbox native optimizations.  This requires that the native optimization classes are available on the classpath, and this AS400 object represents the local system and is configured to allow the native optimizations to be used.
+     Indicates if this AS400 object is enabled to exploit Toolbox native optimizations.  This requires that the native optimization classes are available on the classpath, 
+     and this AS400 object represents the local system and is configured to allow the native optimizations to be used.
      Note: If the authentication scheme is other than {@link #AUTHENTICATION_SCHEME_PASSWORD AUTHENTICATION_SCHEME_PASSWORD}, native optimizations will not be used.
      @return true if the native optimizations can be used; false otherwise.
      @see #isLocal
@@ -2647,8 +2662,14 @@ public class AS400 implements Serializable, AutoCloseable
         return release;
     }
 
-    // Converts a service constant to a service name.
-    public static String getServerName(int service)//@Q10
+    /**
+     * Converts a service constant to the string representation of the service. For example, the integer AS400.File corresponds to the 
+     * string "as-file".
+     * 
+     * @param service The service represented by it's integer value.
+     * @return The string representation of the service. 
+     */
+    public static String getServerName(int service)
     {
         switch (service)
         {
@@ -3829,6 +3850,11 @@ public class AS400 implements Serializable, AutoCloseable
         }
     }
 
+    /**
+     * Set the additional authentication factor for the AS400 object.  This will be used 
+     * when establishing host server connections if the IBM i server supports multifactor authentication. 
+     * @param additionalAuthenticationFactor
+     */
     public void setAdditionalAuthenticationFactor(char[] additionalAuthenticationFactor)
     {
         if (Trace.traceOn_) Trace.log(Trace.DIAGNOSTIC, "Setting additional authentication factor. Length: " 
@@ -4450,7 +4476,6 @@ public class AS400 implements Serializable, AutoCloseable
         if (socketProperties == null)
             throw new NullPointerException("socketProperties");
 
-        
         if (propertiesFrozen_)
         {
             Trace.log(Trace.ERROR, "Cannot set socket properties after connection has been made.");
@@ -5052,10 +5077,18 @@ public class AS400 implements Serializable, AutoCloseable
         return (defaultLocale.equals(Turkishlocale) ) ? true : false;
     }
     
+    /**
+     * Returns the timeout value when attempting to validate the sign on information.
+     * @return The timeout value in milliseconds. 
+     */
     public int getvalidateSignonTimeOut() {
         return validateSignonTimeOut_;
     }
     
+    /**
+     * Set the the timeout value when when attempting to validate the sign on information.
+     * @param validateSignonTimeOut The timeout value in milliseconds. 
+     */
     public void setvalidateSignonTimeOut(int validateSignonTimeOut) {
         validateSignonTimeOut_ = validateSignonTimeOut;
     }
