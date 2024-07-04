@@ -584,6 +584,7 @@ public class AS400 implements Serializable, AutoCloseable
      *CURRENT may be used to specify the current user ID.
      @deprecated   Use AS400(String systemName, String userId, char[] password) instead
      **/
+    @Deprecated
     public AS400(String systemName, String userId, String password)
     {
         super();
@@ -908,6 +909,7 @@ public class AS400 implements Serializable, AutoCloseable
      @param  proxyServer  The name and port of the proxy server in the format <code>serverName[:port]</code>.  If no port is specified, a default will be used.
      @deprecated  Use AS400((String systemName, String userId, char[] password, String proxyServer) instead.
      **/
+    @Deprecated
     public AS400(String systemName, String userId, String password, String proxyServer)
     {
         super();
@@ -1032,10 +1034,8 @@ public class AS400 implements Serializable, AutoCloseable
         showCheckboxes_ = system.showCheckboxes_;
 
         // If passed in system has SSL options, deep copy them if this instance is secure
-        if (system.isSecure()) {
+        if (system.isSecure())
         	useSSLConnection_= new SSLOptions(system.useSSLConnection_); 
-        }
- 
         
         mustAddLanguageLibrary_ = system.mustAddLanguageLibrary_;
         mustUseSockets_ = system.mustUseSockets_;
@@ -1250,6 +1250,7 @@ public class AS400 implements Serializable, AutoCloseable
      @exception  IOException  If an error occurs while communicating with the system.
      @deprecated Use addPasswordCacheEntry(String systemName, String userId, char[] password, String proxyServer) instead. 
      **/
+    @Deprecated
     public static void addPasswordCacheEntry(String systemName, String userId, String password, String proxyServer) throws AS400SecurityException, IOException
     {
         addPasswordCacheEntry(systemName, userId, (password == null) ? (char[])null : password.toCharArray(), proxyServer, false);
@@ -1375,6 +1376,7 @@ public class AS400 implements Serializable, AutoCloseable
     @throws AS400SecurityException  If an error occurs exchanging client/server information
     @deprecated Use {@link #isAdditionalAuthenticationFactorAccepted(String, boolean)}
     **/
+    @Deprecated
     public static boolean  isAdditionalAuthenticationFactorAccepted(String systemName) throws IOException, AS400SecurityException {
        return isAdditionalAuthenticationFactorAccepted(systemName, false);
     }
@@ -1428,6 +1430,7 @@ public class AS400 implements Serializable, AutoCloseable
      @exception  IOException  If an error occurs while communicating with the system.
      @deprecated Using a String as a password is insecure. 
      **/
+    @Deprecated
     public boolean authenticate(String userId, String password) throws AS400SecurityException, IOException
     {
         if (Trace.traceOn_) Trace.log(Trace.DIAGNOSTIC, "Authenticating signon information:", userId);
@@ -1550,6 +1553,7 @@ public class AS400 implements Serializable, AutoCloseable
      @exception  IOException  If an error occurs while communicating with the system.
      @deprecated Use changePassword(char[] oldPassword, char[] newPassword) instead
      **/
+    @Deprecated
     public void changePassword(String oldPassword, String newPassword) throws AS400SecurityException, IOException
     {
         char[] oldPasswordChars = (oldPassword == null) ? null : oldPassword.toCharArray();
@@ -2426,6 +2430,7 @@ public class AS400 implements Serializable, AutoCloseable
      @exception  InterruptedException  If this thread is interrupted.
      @deprecated  Use {@link #getProfileToken(int,int) getProfileToken(int,int)} instead.
      **/
+    @Deprecated
     public ProfileTokenCredential getProfileToken() throws AS400SecurityException, IOException, InterruptedException
     {
         connectService(AS400.SIGNON);
@@ -2489,7 +2494,7 @@ public class AS400 implements Serializable, AutoCloseable
 
             CredentialVault tempVault = (CredentialVault)credVault_.clone();
             tempVault.storeEncodedUsingExternalSeeds(proxySeed, impl_.exchangeSeed(proxySeed));
-            impl_.generateProfileToken(profileToken, userId_, tempVault, gssName_);   // @mds
+            impl_.generateProfileToken(profileToken, userId_, tempVault, gssName_);
         }
         
         return profileToken;
@@ -2509,8 +2514,8 @@ public class AS400 implements Serializable, AutoCloseable
      @exception  InterruptedException  If this thread is interrupted.
      @deprecated  Use {@link #getProfileToken(String, char[]) getProfileToken(String, char[])} instead.
      **/
-    public ProfileTokenCredential getProfileToken(String userId, String password) throws AS400SecurityException, IOException, InterruptedException
-    {
+    @Deprecated
+    public ProfileTokenCredential getProfileToken(String userId, String password) throws AS400SecurityException, IOException, InterruptedException {
         return getProfileToken(userId, password, ProfileTokenCredential.TYPE_SINGLE_USE, 3600);
     }
 
@@ -2528,8 +2533,7 @@ public class AS400 implements Serializable, AutoCloseable
      @exception  IOException  If an error occurs while communicating with the system.
      @exception  InterruptedException  If this thread is interrupted.
      **/
-    public ProfileTokenCredential getProfileToken(String userId, char[] password) throws AS400SecurityException, IOException, InterruptedException
-    {
+    public ProfileTokenCredential getProfileToken(String userId, char[] password) throws AS400SecurityException, IOException, InterruptedException {
         return getProfileToken(userId, password, ProfileTokenCredential.TYPE_SINGLE_USE, 3600);
     }
 
@@ -2554,6 +2558,7 @@ public class AS400 implements Serializable, AutoCloseable
      @exception  InterruptedException  If this thread is interrupted.
      @deprecated  Use {@link #getProfileToken(String, char[],int,int) getProfileToken(String, char[],int,int)} instead.
      **/
+    @Deprecated
     public ProfileTokenCredential getProfileToken(String userId, String password, int tokenType, int timeoutInterval) throws AS400SecurityException, IOException, InterruptedException
     {
         char[] passwordChars = (password == null) ? null : password.toCharArray();
@@ -2653,8 +2658,8 @@ public class AS400 implements Serializable, AutoCloseable
     {
         if (Trace.traceOn_) Trace.log(Trace.DIAGNOSTIC, "Getting release level.");
         if (signonInfo_ == null) {
-          chooseImpl();
-          signon(false);
+            chooseImpl();
+            signon(false);
         }
         int release = signonInfo_.version.getRelease();
         if (Trace.traceOn_) Trace.log(Trace.DIAGNOSTIC, "Release level:", release);
@@ -2802,6 +2807,7 @@ public class AS400 implements Serializable, AutoCloseable
      @see DateTimeConverter#timeZoneForSystem
      @deprecated Use {@link #getTimeZone() getTimeZone()} instead.
      **/
+    @Deprecated
     public TimeZone getSystemTimeZone()
       throws AS400SecurityException,
              ErrorCompletingRequestException,
@@ -4275,6 +4281,7 @@ public class AS400 implements Serializable, AutoCloseable
      @param  password  The user profile password.
      @deprecated 
      **/
+    @Deprecated
     public void setPassword(String password)
     {
         char[] passwordChars = (password == null) ? null : password.toCharArray(); 
@@ -4827,6 +4834,7 @@ public class AS400 implements Serializable, AutoCloseable
      @exception  IOException  If an error occurs while communicating with the system.
      @deprecated
      **/
+    @Deprecated
     public boolean validateSignon(String password) throws AS400SecurityException, IOException
     {
         char[] passwordChars = (password == null) ? null : password.toCharArray();
@@ -4886,6 +4894,7 @@ public class AS400 implements Serializable, AutoCloseable
      @exception  IOException  If an error occurs while communicating with the system.
      @deprecated Using a string as a password is insecure
      **/
+    @Deprecated
     public boolean validateSignon(String userId, String password) throws AS400SecurityException, IOException
     {
         char[] passwordChars = (password == null) ? null : password.toCharArray();
@@ -5157,6 +5166,7 @@ public class AS400 implements Serializable, AutoCloseable
     @return  The key ring class name.
     @deprecated
     **/
+    @Deprecated
    public String getKeyRingName()
    {
        ensureSecureInstance();
@@ -5216,6 +5226,7 @@ public class AS400 implements Serializable, AutoCloseable
     @param  keyRingPassword  The password for the key ring class.
     @deprecated
     **/
+   @Deprecated
    public void setKeyRingPassword(String keyRingPassword)
    {
        ensureSecureInstance();
