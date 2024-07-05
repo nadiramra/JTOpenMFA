@@ -549,11 +549,9 @@ public class AS400 implements Serializable, AutoCloseable
 
         if (PASSWORD_TRACE) Trace.log(Trace.DIAGNOSTIC, "profile token provider:", tokenProvider.getClass().getName());
 
-        // Was a refresh threshold specified?
-        if (refreshThreshold != null)
-            constructWithProfileToken(systemName, new ManagedProfileTokenVault(tokenProvider, refreshThreshold.intValue()));
-        else
-            constructWithProfileToken(systemName, new ManagedProfileTokenVault(tokenProvider));
+        constructWithProfileToken(systemName, (refreshThreshold != null) 
+                                                   ? new ManagedProfileTokenVault(tokenProvider, refreshThreshold.intValue())
+                                                   : new ManagedProfileTokenVault(tokenProvider));
     }
 
     /**
@@ -631,15 +629,15 @@ public class AS400 implements Serializable, AutoCloseable
      @param  userId  The user profile name to use to authenticate to the system.  If running on IBM i, *CURRENT 
              may be used to specify the current user ID.
      @param  password  The user profile password to use to authenticate to the system.
-     @param  additionalAuthenticationFactor Additional authentication factor (or null if not providing one).
+     @param  additionalAuthFactor Additional authentication factor (or null if not providing one).
      The caller is responsible for clearing the password array to keep the password from residing in memory. 
      @throws AS400SecurityException  If a security or authority error occurs.
      @throws IOException   If an error occurs while communicating with the system.
      **/
-    public AS400(String systemName, String userId, char[] password, char[] additionalAuthenticationFactor) throws AS400SecurityException, IOException
+    public AS400(String systemName, String userId, char[] password, char[] additionalAuthFactor) throws AS400SecurityException, IOException
     {
         this(systemName, userId, password);
-        setAdditionalAuthenticationFactor(additionalAuthenticationFactor);
+        setAdditionalAuthenticationFactor(additionalAuthFactor);
     }
 
     /**
@@ -861,7 +859,7 @@ public class AS400 implements Serializable, AutoCloseable
     
     // Private constructor for use when a new object is needed and the password is already twiddled.
     // Used by password cache and password verification code.
-    private AS400(String systemName, String userId, CredentialVault pwVault, char[] additionalAuthenticationFactor)
+    private AS400(String systemName, String userId, CredentialVault pwVault, char[] additionalAuthFactor)
     {
         super();
         if (Trace.traceOn_) Trace.log(Trace.DIAGNOSTIC, "Constructing internal AS400 object, system name: '" + systemName + "' user ID: '" + userId + "'");
@@ -897,7 +895,7 @@ public class AS400 implements Serializable, AutoCloseable
         // that behavior, but we need to do so using two different credential vaults,
         // because each AS400 object must always have its very own credential vault.
         credVault_ = pwVault.clone();
-        setAdditionalAuthenticationFactor(additionalAuthenticationFactor);
+        setAdditionalAuthenticationFactor(additionalAuthFactor);
         proxyServer_ = resolveProxyServer(proxyServer_);
     }
 
@@ -1108,15 +1106,15 @@ public class AS400 implements Serializable, AutoCloseable
     @param  userId  The user profile name to use to authenticate to the system.  If running on IBM i, *CURRENT may be used to specify the current user ID.
     @param  password  The user profile password to use to authenticate to the system.
             The caller is responsible for clearing the password array to keep the password from residing in memory. 
-    @param  additionalAuthenticationFactor Additional authentication factor (or null if not providing one).
+    @param  additionalAuthFactor Additional authentication factor (or null if not providing one).
     @return AS400 object.
     @throws IOException   If an error occurs while communicating with the system.
     @throws AS400SecurityException  If a security or authority error occurs.
     **/
-    public static AS400 newInstance(boolean useSSL, String systemName, String userId, char[] password, char[] additionalAuthenticationFactor) throws IOException, AS400SecurityException
+    public static AS400 newInstance(boolean useSSL, String systemName, String userId, char[] password, char[] additionalAuthFactor) throws IOException, AS400SecurityException
     {
-        return (useSSL) ? new SecureAS400(systemName, userId, password, additionalAuthenticationFactor) 
-                        : new AS400(systemName, userId, password, additionalAuthenticationFactor);
+        return (useSSL) ? new SecureAS400(systemName, userId, password, additionalAuthFactor) 
+                        : new AS400(systemName, userId, password, additionalAuthFactor);
     }
     
     /**
@@ -1586,11 +1584,11 @@ public class AS400 implements Serializable, AutoCloseable
      Changes the user profile password.  The system name and user profile name need to be set prior to calling this method.
      @param  oldPassword  The old user profile password.
      @param  newPassword  The new user profile password.
-     @param  additionalAuthenticationFactor Additional authentication factor (or null if not providing one).
+     @param  additionalAuthFactor Additional authentication factor (or null if not providing one).
      @exception  AS400SecurityException  If a security or authority error occurs.
      @exception  IOException  If an error occurs while communicating with the system.
      **/
-    public void changePassword(char[] oldPassword, char[] newPassword, char[] additionalAuthenticationFactor) throws AS400SecurityException, IOException
+    public void changePassword(char[] oldPassword, char[] newPassword, char[] additionalAuthFactor) throws AS400SecurityException, IOException
     {
         if (Trace.traceOn_) Trace.log(Trace.DIAGNOSTIC, "Changing password.");
         if (PASSWORD_TRACE)
@@ -1647,7 +1645,7 @@ public class AS400 implements Serializable, AutoCloseable
                 byte[] encodeNewBytes = CredentialVault.encode(proxySeed, remoteSeed, newbytes);
 
                 signonInfo_ = impl_.changePassword(systemName_,  systemNameLocal_, userId_,  
-                                               encodeOldBytes,  encodeNewBytes,  additionalAuthenticationFactor);
+                                               encodeOldBytes,  encodeNewBytes,  additionalAuthFactor);
             }
             finally {
                 CredentialVault.clearArray(oldbytes); 
@@ -2424,6 +2422,7 @@ public class AS400 implements Serializable, AutoCloseable
      <p>The returned token will be created single-use with a one hour time to expiration. Subsequent method calls will return the same token, regardless of the token status.
      <p>This function is not supported if the assigned password is *CURRENT.
      <p>This function is only supported if the system is at i5/OS V4R5M0 or greater.
+     <p><b>Note:</b> If an additional authentication factor has been set for the AS400 object, it will be used when generating the profile token.
      @return  A ProfileTokenCredential representing the currently signed on user.
      @exception  AS400SecurityException  If a security or authority error occurs.
      @exception  IOException  If an error occurs while communicating with the system.
@@ -2443,7 +2442,9 @@ public class AS400 implements Serializable, AutoCloseable
 
     /**
      Authenticates the assigned user profile and password and returns a corresponding ProfileTokenCredential if successful.
-     <p>This function is not supported if the assigned password is *CURRENT and cannot be used to generate a renewable token.  This function is only supported if the system is at i5/OS V4R5M0 or greater.
+     <p>This function is not supported if the assigned password is *CURRENT and cannot be used to generate a renewable token.  
+     This function is only supported if the system is at i5/OS V4R5M0 or greater.
+     <p><b>Note:</b> If an additional authentication factor has been set for the AS400 object, it will be used when generating the profile token.
      @param  tokenType  The type of profile token to create.  Possible types are defined as fields on the ProfileTokenCredential class:
      <ul>
      <li>{@link com.ibm.as400.security.auth.ProfileTokenCredential#TYPE_SINGLE_USE TYPE_SINGLE_USE}
@@ -2475,6 +2476,7 @@ public class AS400 implements Serializable, AutoCloseable
             profileToken.setSystem(this);
             profileToken.setTokenType(tokenType);
             profileToken.setTimeoutInterval(timeoutInterval);
+            profileToken.setAdditionalAuthenticationFactor(additionalAuthenticationFactor_);
         }
         catch (PropertyVetoException e)
         {
@@ -2595,6 +2597,39 @@ public class AS400 implements Serializable, AutoCloseable
      **/
     public ProfileTokenCredential getProfileToken(String userId, char[] password, int tokenType, int timeoutInterval) throws AS400SecurityException, IOException, InterruptedException
     {
+        return getProfileToken(userId, password, null, tokenType, timeoutInterval, null, null);
+    }
+    
+    /**
+     Authenticates the given user profile and password and returns a corresponding ProfileTokenCredential if successful.
+     <p>Invoking this method does not change the user ID and password assigned to the system or otherwise modify the user or authorities under which the application is running.
+     <p>This function is only supported if the system is at i5/OS V4R5M0 or greater.
+     <p><b>Note:</b> Providing an incorrect password increments the number of failed sign-on attempts for the user profile, 
+     and can result in the profile being disabled.  Refer to documentation on the <i>ProfileTokenCredential</i> class for additional restrictions.
+
+     @param  userId  The user profile name.
+     @param  password  The user profile password.
+     @param  additionalAuthFactor The additional authentication factor or null if not specifying one.
+     @param  tokenType  The type of profile token to create.  Possible types are defined as fields on the ProfileTokenCredential class:
+     <ul>
+     <li>{@link com.ibm.as400.security.auth.ProfileTokenCredential#TYPE_SINGLE_USE TYPE_SINGLE_USE}
+     <li>{@link com.ibm.as400.security.auth.ProfileTokenCredential#TYPE_MULTIPLE_USE_NON_RENEWABLE TYPE_MULTIPLE_USE_NON_RENEWABLE}
+     <li>{@link com.ibm.as400.security.auth.ProfileTokenCredential#TYPE_MULTIPLE_USE_RENEWABLE TYPE_MULTIPLE_USE_RENEWABLE}
+     </ul>
+     @param  timeoutInterval  The number of seconds to expiration when the token is created (1-3600).
+     @param  verificationID  The verification ID that will be associated with profile token. 
+     The verification ID is the label that identifies the specific application, service, or action associated with the profile token request. 
+     A null value will result in the host server using a default value.
+     @param  remoteIPAddress  The remote IP address (the IP address of the requester) that will be associated with profile token.
+     A null value will result in the host server using a default value.
+     @return  A ProfileTokenCredential representing the authenticated profile and password.
+     @exception  AS400SecurityException  If a security or authority error occurs.
+     @exception  IOException  If an error occurs while communicating with the system.
+     @exception  InterruptedException  If this thread is interrupted.
+     **/
+    public ProfileTokenCredential getProfileToken(String userId, char[] password, char[] additionalAuthFactor, int tokenType, int timeoutInterval, 
+                                                  String verificationID, String remoteIPAddress) throws AS400SecurityException, IOException, InterruptedException
+    {
         connectService(AS400.SIGNON);
 
         if (userId == null)
@@ -2618,6 +2653,9 @@ public class AS400 implements Serializable, AutoCloseable
             profileToken.setSystem(this);
             profileToken.setTokenType(tokenType);
             profileToken.setTimeoutInterval(timeoutInterval);
+            profileToken.setVerificationID(verificationID);
+            profileToken.setRemoteIPAddress(remoteIPAddress);
+            profileToken.setAdditionalAuthenticationFactor(additionalAuthFactor);
         }
         catch (PropertyVetoException e)
         {
@@ -3859,16 +3897,19 @@ public class AS400 implements Serializable, AutoCloseable
     /**
      * Set the additional authentication factor for the AS400 object.  This will be used 
      * when establishing host server connections if the IBM i server supports multifactor authentication. 
-     * @param additionalAuthenticationFactor
+     * 
+     * @param additionalAuthFactor The additional authentication factor. 
      */
-    public void setAdditionalAuthenticationFactor(char[] additionalAuthenticationFactor)
+    public void setAdditionalAuthenticationFactor(char[] additionalAuthFactor)
     {
         if (Trace.traceOn_) Trace.log(Trace.DIAGNOSTIC, "Setting additional authentication factor. Length: " 
-                     + ((additionalAuthenticationFactor == null) ? 0 : additionalAuthenticationFactor.length));
+                     + ((additionalAuthFactor == null) ? 0 : additionalAuthFactor.length));
 
-        additionalAuthenticationFactor_ = null;
-        if (null != additionalAuthenticationFactor && 0 < additionalAuthenticationFactor.length )
-            additionalAuthenticationFactor_ = Arrays.copyOf(additionalAuthenticationFactor, additionalAuthenticationFactor.length);
+        additionalAuthenticationFactor_ = (null != additionalAuthFactor && 0 < additionalAuthFactor.length ) 
+                ?  Arrays.copyOf(additionalAuthFactor, additionalAuthFactor.length) : null;
+        
+        if (impl_ != null)
+            impl_.setAdditionalAuthenticationFactor(additionalAuthenticationFactor_);
     }
     
     // Store information in password cache.
@@ -4932,12 +4973,12 @@ public class AS400 implements Serializable, AutoCloseable
      <p><b>Note:</b> This will return true if the information is successfully validated.  An unsuccessful validation will cause an exception to be thrown, false is never returned.
      @param  userId  The user profile name to validate.
      @param  password  The user profile password to validate.
-     @param  additionalAuthenticationFactor Additional authentication factor (or null if not providing one).
+     @param  additionalAuthFactor Additional authentication factor (or null if not providing one).
      @return  true if successful.
      @exception  AS400SecurityException  If a security or authority error occurs.
      @exception  IOException  If an error occurs while communicating with the system.
      **/
-    public boolean validateSignon(String userId, char[] password, char[] additionalAuthenticationFactor) throws AS400SecurityException, IOException
+    public boolean validateSignon(String userId, char[] password, char[] additionalAuthFactor) throws AS400SecurityException, IOException
     {
         if (Trace.traceOn_) Trace.log(Trace.DIAGNOSTIC, "Validating signon, password and additional factor, user ID: '" + userId + "'");
 
@@ -4961,12 +5002,12 @@ public class AS400 implements Serializable, AutoCloseable
           userId = userId.toUpperCase(Locale.ENGLISH);
           if (Trace.traceOn_) Trace.log(Trace.DIAGNOSTIC, "This system locale is Turkish, userId.toUpperCase(Locale.ENGLISH)");
         }
-        return validateSignon(true, userId.toUpperCase(), tempVault, additionalAuthenticationFactor);
+        return validateSignon(true, userId.toUpperCase(), tempVault, additionalAuthFactor);
     }
     
     // Internal version of validate sign-on; takes checked user ID and twiddled password bytes.
     // If the signon info is not valid, an exception is thrown.
-    private boolean validateSignon(boolean useNewInstance, String userId, CredentialVault pwVault, char[] additionalAuthenticationFactor) throws AS400SecurityException, IOException
+    private boolean validateSignon(boolean useNewInstance, String userId, CredentialVault pwVault, char[] additionalAuthFactor) throws AS400SecurityException, IOException
     {
          // Use a new instance when system, userid, and credentials are not part of this
         // instance of AS400 class;  otherwise, use this instance. 
@@ -4974,7 +5015,7 @@ public class AS400 implements Serializable, AutoCloseable
         {
             if (Trace.traceOn_) Trace.log(Trace.DIAGNOSTIC, "Creating temporary connection for validating signon info.");
 
-            try (AS400 validationSystem = new AS400(systemName_, userId, pwVault, additionalAuthenticationFactor))
+            try (AS400 validationSystem = new AS400(systemName_, userId, pwVault, additionalAuthFactor))
             {
                 validationSystem.proxyServer_ = proxyServer_;
                 // proxyClientConnection_ is not needed.

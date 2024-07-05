@@ -29,6 +29,7 @@ import java.net.Socket;
 import java.nio.ByteBuffer;
 import java.nio.CharBuffer;
 import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.security.InvalidAlgorithmParameterException;
 import java.security.InvalidKeyException;
@@ -171,8 +172,8 @@ public class AS400ImplRemote implements AS400Impl
   // hostcnn server client seed, held from hostcnn connection until hostcnn disconnect.
   private byte[] hostcnn_clientSeed_;
   
-  // Additional authentication factor. We have to hold on to it because it may be timed. 
-  private char[] additionalAuthFactor_;
+  // Additional authentication factor. We have to hold on to it because it may be timed, and thus can be reused. 
+  private byte[] additionalAuthFactor_;
   
   private int UserHandle2_ = UNINITIALIZED;
 
@@ -561,7 +562,8 @@ public class AS400ImplRemote implements AS400Impl
 
           ChangePasswordReq chgReq = new ChangePasswordReq(userIdEbcdic,
                   encryptedPassword, oldProtected, oldPassword.length * 2,
-                  newProtected, newPassword.length * 2, serverLevel_, additionalAuthenticationFactor);
+                  newProtected, newPassword.length * 2, serverLevel_, 
+                  (additionalAuthenticationFactor != null ? (new String(additionalAuthenticationFactor)).getBytes(StandardCharsets.UTF_8) : null));
           ChangePasswordRep chgRep = (ChangePasswordRep) signonServer_.sendAndReceive(chgReq);
           int rc = chgRep.getRC();
           if (rc == 0)
@@ -940,7 +942,7 @@ public class AS400ImplRemote implements AS400Impl
       }
   }
 
-  // Flow the generate profile token datastream.
+  @Override
   public void generateProfileToken(ProfileTokenCredential profileToken, String userId, CredentialVault vault, String gssName)
       throws AS400SecurityException, IOException, InterruptedException
   {
@@ -1079,10 +1081,32 @@ public class AS400ImplRemote implements AS400Impl
                   authenticationBytes = generateSha512Substitute(userId_, token, serverSeed_, clientSeed_, sequence);
               }
           }
+          
+          byte[] aaf             = aafIndicator_ ? additionalAuthFactor_ : null;
+          byte[] verificationID  = null;
+          byte[] clientIPAddress = null;
+          
+          if (getVRM() > 0x00070500)
+          {
+              if (ProfileTokenCredential.useEnhancedProfileTokens())
+              {
+                  String verificationID_s  = profileToken.getVerificationID();
+                  verificationID = (verificationID_s != null && !verificationID_s.isEmpty()) ? verificationID_s.getBytes(StandardCharsets.UTF_8) : null;
+                  
+                  String clientIPAddress_s = profileToken.getRemoteIPAddress();
+                  verificationID = (clientIPAddress_s != null && !clientIPAddress_s.isEmpty()) ? clientIPAddress_s.getBytes(StandardCharsets.UTF_8) : null;
+              }
+              else
+              {
+                  verificationID  = "*NOUSE".getBytes(StandardCharsets.UTF_8);
+                  clientIPAddress = "*NOUSE".getBytes(StandardCharsets.UTF_8);
+              }
+          }
 
           AS400GenAuthTknDS req = new AS400GenAuthTknDS(userIdEbcdic,
                   authenticationBytes, authScheme, profileToken.getTokenType(),
-                  profileToken.getTimeoutInterval(), serverLevel_);
+                  profileToken.getTimeoutInterval(), serverLevel_, aaf, verificationID, clientIPAddress);
+          
           CredentialVault.clearArray(authenticationBytes);
           AS400GenAuthTknReplyDS rep = (AS400GenAuthTknReplyDS) signonServer_.sendAndReceive(req);
           req.clear(); 
@@ -1403,18 +1427,15 @@ public class AS400ImplRemote implements AS400Impl
       return jobString;
   }
 
-  public AS400Server getConnection(int service, boolean forceNewConnection)
-      throws AS400SecurityException, IOException {
+  public AS400Server getConnection(int service, boolean forceNewConnection) throws AS400SecurityException, IOException {
       return getConnection(service, forceNewConnection, false /*Skip signon server */);
   }
 
-  AS400Server getConnection(int service, boolean forceNewConnection,
-      boolean skipSignonServer) throws AS400SecurityException, IOException {
+  AS400Server getConnection(int service, boolean forceNewConnection, boolean skipSignonServer) throws AS400SecurityException, IOException {
       return getConnection(service, -1, forceNewConnection, skipSignonServer);
   }
   
-  synchronized AS400Server getConnection(int service, int overridePort, boolean forceNewConnection,
-      boolean skipSignonServer) throws AS400SecurityException, IOException
+  synchronized AS400Server getConnection(int service, int overridePort, boolean forceNewConnection, boolean skipSignonServer) throws AS400SecurityException, IOException
   {
       if (Trace.traceOn_)
           Trace.log(Trace.DIAGNOSTIC, "Handling request for host server job connection: " + AS400.getServerName(service));
@@ -1539,6 +1560,7 @@ public class AS400ImplRemote implements AS400Impl
                       Trace.log(Trace.DIAGNOSTIC, "  Server seed:", serverSeed);
                       Trace.log(Trace.DIAGNOSTIC, "  Encrypted password:", ddmSubstitutePassword);
                   }
+                  
                   byte[] iaspBytes = null;
                   if (ddmRDB_ != null)
                   {
@@ -1546,8 +1568,29 @@ public class AS400ImplRemote implements AS400Impl
                       iaspBytes = text18.toBytes(ddmRDB_);
                   }
                   
+                  byte[] aaf             = aafIndicator_ ? additionalAuthFactor_ : null;
+                  byte[] verificationID  = null;
+                  byte[] clientIPAddress = null;
+                  
+                  if ((credVault_ instanceof ProfileTokenVault) && (getVRM() > 0x00070500))
+                  {
+                      if (ProfileTokenCredential.useEnhancedProfileTokens())
+                      {
+                          String verificationID_s  = ((ProfileTokenVault)credVault_).getProfileTokenCredential().getVerificationID();
+                          verificationID = (verificationID_s != null && !verificationID_s.isEmpty()) ? verificationID_s.getBytes(StandardCharsets.UTF_8) : null;
+                          
+                          String clientIPAddress_s = ((ProfileTokenVault)credVault_).getProfileTokenCredential().getRemoteIPAddress();
+                          verificationID = (clientIPAddress_s != null && !clientIPAddress_s.isEmpty()) ? clientIPAddress_s.getBytes(StandardCharsets.UTF_8) : null;
+                      }
+                      else
+                      {
+                          verificationID  = "*NOUSE".getBytes(StandardCharsets.UTF_8);
+                          clientIPAddress = "*NOUSE".getBytes(StandardCharsets.UTF_8);
+                      }
+                  }
+                  
                   ClassDecoupler.connectDDMPhase2(outStream, inStream, userIDbytes, ddmSubstitutePassword, iaspBytes,
-                                                  authScheme, ddmRDB_, systemName_, connectionID);
+                                                  authScheme, ddmRDB_, systemName_, connectionID, aaf, verificationID, clientIPAddress);
               }
               else
               {
@@ -5170,8 +5213,7 @@ public class AS400ImplRemote implements AS400Impl
   @Override
   public void setAdditionalAuthenticationFactor(char[] additionalAuthFactor)
   {
-      additionalAuthFactor_ = null;
-      if (null != additionalAuthFactor && 0 < additionalAuthFactor.length )
-          additionalAuthFactor_ = Arrays.copyOf(additionalAuthFactor, additionalAuthFactor.length);
+      additionalAuthFactor_ = (null != additionalAuthFactor && 0 < additionalAuthFactor.length )
+              ? (new String(additionalAuthFactor)).getBytes(StandardCharsets.UTF_8) : null;
   }
 }

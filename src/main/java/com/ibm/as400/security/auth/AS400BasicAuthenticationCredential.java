@@ -57,6 +57,7 @@ public interface AS400BasicAuthenticationCredential
      *             {{@link #initialize(AS400BasicAuthenticationPrincipal, char[], boolean, boolean, boolean, int)}
      *             instead
      */
+    @Deprecated
     public void initialize(AS400BasicAuthenticationPrincipal principal, String password, boolean isPrivate,
             boolean isReusable, boolean isRenewable, int timeoutInterval) throws Exception;
 
