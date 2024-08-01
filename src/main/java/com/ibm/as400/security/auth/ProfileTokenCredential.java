@@ -1479,7 +1479,8 @@ public final class ProfileTokenCredential extends AS400Credential implements AS4
 
         char[] old = additionalAuthenticationFactor_;
         fireVetoableChange("additionalAuthenticationFactor", old, additionalAuthenticationFactor);
-        additionalAuthenticationFactor_ = Arrays.copyOf(additionalAuthenticationFactor, additionalAuthenticationFactor.length);
+        additionalAuthenticationFactor_ = (additionalAuthenticationFactor != null) 
+                ? Arrays.copyOf(additionalAuthenticationFactor, additionalAuthenticationFactor.length) : null;
         firePropertyChange("additionalAuthenticationFactor", old, additionalAuthenticationFactor);
     }
 
