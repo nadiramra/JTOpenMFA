@@ -881,7 +881,6 @@ public class AS400ImplRemote implements AS400Impl
   @Override
   public void generateProfileToken(ProfileTokenCredential profileToken, String userIdentity) throws AS400SecurityException, IOException
   {
-      // TODO AMRA - profile tokens via hostcnn
       signonConnect();
 
       try
@@ -946,7 +945,6 @@ public class AS400ImplRemote implements AS400Impl
   public void generateProfileToken(ProfileTokenCredential profileToken, String userId, CredentialVault vault, String gssName)
       throws AS400SecurityException, IOException, InterruptedException
   {
-      // TODO AMRA - profile tokens via hostcnn
       signonConnect();
       
       try
@@ -1094,7 +1092,7 @@ public class AS400ImplRemote implements AS400Impl
                   verificationID = (verificationID_s != null && !verificationID_s.isEmpty()) ? verificationID_s.getBytes(StandardCharsets.UTF_8) : null;
                   
                   String clientIPAddress_s = profileToken.getRemoteIPAddress();
-                  verificationID = (clientIPAddress_s != null && !clientIPAddress_s.isEmpty()) ? clientIPAddress_s.getBytes(StandardCharsets.UTF_8) : null;
+                  clientIPAddress = (clientIPAddress_s != null && !clientIPAddress_s.isEmpty()) ? clientIPAddress_s.getBytes(StandardCharsets.UTF_8) : null;
               }
               else
               {
@@ -2394,11 +2392,65 @@ public class AS400ImplRemote implements AS400Impl
   }
 
   private SignonPingReq signonPingRequest_;
-  private SignonPingReq hostcnnPingRequest_;
   private IFSPingReq ifsPingRequest_;
   private static final int NO_PRIOR_SERVICE = -1;
   private int priorService_ = NO_PRIOR_SERVICE;
 
+  
+  private boolean doPingRequest(AS400Server connectedServer, boolean setPriorService) throws IOException, InterruptedException
+  {
+      int service = connectedServer.getService();
+      
+      if (service == AS400.FILE)
+      {
+          // a dummy request, just to get a reply
+          if (ifsPingRequest_ == null)
+              ifsPingRequest_ = new IFSPingReq();
+
+          // We expect to get back a reply indicating "request not supported".
+          DataStream reply = connectedServer.sendAndReceive(ifsPingRequest_);
+
+          if (DEBUG)
+          {
+              // Sanity-check the reply.
+              if (reply instanceof IFSReturnCodeRep)
+              {
+                  int returnCode = ((IFSReturnCodeRep) reply).getReturnCode();
+                  // We expect the return code to indicate REQUEST_NOT_SUPPORTED.
+                  // That sort of error doesn't clutter the job log with error entries.
+                  if (returnCode != IFSReturnCodeRep.REQUEST_NOT_SUPPORTED && Trace.traceOn_)
+                      Trace.log(Trace.DIAGNOSTIC, "Ping of File Server failed with unexpected return code " + returnCode);
+              }
+              else
+                  Trace.log(Trace.WARNING, "Unexpected IFS reply datastream received.", reply.data_);
+          }
+      }
+      else if (service == AS400.RECORDACCESS)
+      {
+          // If all we have is a connection to the DDM Server, simply return true.
+          // We don't have a way to ping the DDM server without creating an error entry in the job log.
+      }
+      else
+      {
+          // Only for common servers that support signon ping request
+      
+          // To reliably detect a connection is still up, we need to
+          // send a payload and do a receive. Just sending and discarding reply will not detect broken pipe!
+          
+          if (signonPingRequest_ == null)
+              signonPingRequest_ = new SignonPingReq(12345);
+    
+          connectedServer.sendAndReceive(signonPingRequest_);
+      }
+      
+      if (setPriorService)
+          priorService_ = (service != AS400.RECORDACCESS) ? service : NO_PRIOR_SERVICE;
+      
+      // Note that an exception will be thrown if not connected. 
+      return true;
+  }
+  
+  
   // Check connection's current status.
   @Override
   public boolean isConnectionAlive()
@@ -2450,20 +2502,9 @@ public class AS400ImplRemote implements AS400Impl
                       AS400.DATABASE, AS400.PRINT, AS400.DATAQUEUE, AS400.CENTRAL });
           }
 
-          // If we have a connection to a "common" server, send the ping request.
           // If no exception gets thrown, report that the connection is alive.
           if (connectedServer != null)
-          {
-              // the above services all support "ping"
-              if (signonPingRequest_ == null)
-                  signonPingRequest_ = new SignonPingReq();
-
-              connectedServer.sendAndDiscardReply(signonPingRequest_);
-
-              // If no exception was thrown, then the ping succeeded.
-              isAlive = true;
-              priorService_ = connectedServer.getService();
-          }
+              isAlive = doPingRequest(connectedServer, true);
 
           // If we have a connection to the File Server, send the ping request.
           // Then if a reply comes back, swallow the "invalid request" error and
@@ -2471,35 +2512,8 @@ public class AS400ImplRemote implements AS400Impl
           if (connectedServer == null)
           {
               connectedServer = getConnectedServer(new int[] { AS400.FILE });
-              
               if (connectedServer != null)
-              {
-                  // a dummy request, just to get a reply
-                  if (ifsPingRequest_ == null)
-                      ifsPingRequest_ = new IFSPingReq();
-
-                  // We expect to get back a reply indicating "request not supported".
-                  DataStream reply = connectedServer.sendAndReceive(ifsPingRequest_);
-                  // If no exception was thrown, then the ping succeeded.
-
-                  isAlive = true;
-                  priorService_ = connectedServer.getService();
-
-                  if (DEBUG)
-                  {
-                      // Sanity-check the reply.
-                      if (reply instanceof IFSReturnCodeRep)
-                      {
-                          int returnCode = ((IFSReturnCodeRep) reply).getReturnCode();
-                          // We expect the return code to indicate REQUEST_NOT_SUPPORTED.
-                          // That sort of error doesn't clutter the job log with error entries.
-                          if (returnCode != IFSReturnCodeRep.REQUEST_NOT_SUPPORTED && Trace.traceOn_)
-                              Trace.log(Trace.DIAGNOSTIC, "Ping of File Server failed with unexpected return code " + returnCode);
-                      }
-                      else
-                          Trace.log(Trace.WARNING, "Unexpected IFS reply datastream received.", reply.data_);
-                  }
-              }
+                  isAlive = doPingRequest(connectedServer, true);
           }
 
           // If all we have is a connection to the DDM Server, simply return true.
@@ -2509,8 +2523,7 @@ public class AS400ImplRemote implements AS400Impl
           {
               if (isConnected(AS400.RECORDACCESS))
               {
-                  Trace.log(Trace.DIAGNOSTIC,
-                          "For the RECORDACCESS service, isConnectionAlive() defaults to the behavior of isConnected().");
+                  Trace.log(Trace.DIAGNOSTIC, "For the RECORDACCESS service, isConnectionAlive() defaults to the behavior of isConnected().");
                   isAlive = true;
               }
 
@@ -2519,8 +2532,7 @@ public class AS400ImplRemote implements AS400Impl
       }
       catch (Exception e)
       {
-          if (Trace.traceOn_)
-              Trace.log(Trace.DIAGNOSTIC, e);
+          if (Trace.traceOn_) Trace.log(Trace.DIAGNOSTIC, e);
           isAlive = false;
       }
 
@@ -2559,85 +2571,12 @@ public class AS400ImplRemote implements AS400Impl
 
           // If we have a connection to the specified service, send the ping request.
           // If no exception gets thrown, report that the connection is alive.
-
           if (connectedServer != null)
-          {
-              if (service == AS400.RECORDACCESS)
-              {
-                  // Special handling for the DDM Server.
-
-                  // For the DDM Server, simply return true.
-                  // We don't have a way to ping the DDM server without creating an
-                  // error entry in the host server's job log.
-
-                  Trace.log(Trace.DIAGNOSTIC,
-                          "For the RECORDACCESS service, isConnectionAlive() defaults to the behavior of isConnected().");
-                  isAlive = true;
-              }
-              else if (service == AS400.FILE)
-              {
-                  // Special handling for the File Server.
-
-                  // a dummy request, just to get a reply
-                  if (ifsPingRequest_ == null)
-                      ifsPingRequest_ = new IFSPingReq();
-
-                  // We expect to get back a reply indicating "request not supported".
-                  DataStream reply = connectedServer.sendAndReceive(ifsPingRequest_);
-                  // If no exception was thrown, then the ping succeeded.
-
-                  isAlive = true;
-
-                  if (DEBUG)
-                  {
-                      // Sanity-check the reply.
-                      if (reply instanceof IFSReturnCodeRep)
-                      {
-                          int returnCode = ((IFSReturnCodeRep) reply).getReturnCode();
-                          // We expect the return code to indicate REQUEST_NOT_SUPPORTED.
-                          // That sort of error doesn't clutter the job log with error
-                          // entries.
-                          if (returnCode != IFSReturnCodeRep.REQUEST_NOT_SUPPORTED && Trace.traceOn_)
-                              Trace.log(Trace.DIAGNOSTIC,
-                                      "Ping of File Server failed with unexpected return code " + returnCode);
-                      }
-                      else
-                          Trace.log(Trace.WARNING, "Unexpected IFS reply datastream received.", reply.data_);
-                  }
-              }
-              else if (service == AS400.HOSTCNN)
-              {
-                  // TODO maybe should be the default for all isAlive tests?
-                  
-                  // To reliably detect a connection is still up, we need to 
-                  // to send a payload and do a receive. 
-                  
-                  // It's a "common service", which will accept a Signon Ping Request.
-                  if (hostcnnPingRequest_ == null)
-                      hostcnnPingRequest_ = new SignonPingReq(12345);
-
-                  connectedServer.sendAndReceive(hostcnnPingRequest_);
-                  // If no exception was thrown, then the ping succeeded.
-
-                  isAlive = true;
-              }
-              else
-              {
-                  // It's a "common service", which will accept a Signon Ping Request.
-                  if (signonPingRequest_ == null)
-                      signonPingRequest_ = new SignonPingReq();
-
-                  connectedServer.sendAndDiscardReply(signonPingRequest_);
-                  // If no exception was thrown, then the ping succeeded.
-
-                  isAlive = true;
-              }
-          }
+              isAlive = doPingRequest(connectedServer, false);
       }
       catch (Exception e)
       {
-          if (Trace.traceOn_)
-              Trace.log(Trace.DIAGNOSTIC, e);
+          if (Trace.traceOn_) Trace.log(Trace.DIAGNOSTIC, e);
           isAlive = false;
       }
 
@@ -3996,20 +3935,22 @@ public class AS400ImplRemote implements AS400Impl
       if (Trace.traceOn_) Trace.log(Trace.DIAGNOSTIC, "Attempting to connect to as-signon server.");
 
       boolean connectedSuccessfully = false;
-      
-      SocketContainer signonConnection = PortMapper.getServerSocket((systemNameLocal_) ? "localhost" : systemName_,
-              AS400.SIGNON, useSSLConnection_, socketProperties_, mustUseNetSockets_);
-      AS400NoThreadServer signonServer = new AS400NoThreadServer(this, AS400.SIGNON, signonConnection, "");
-      int connectionID = signonConnection.hashCode();
+      AS400NoThreadServer signonServer = null;
       
       try
       {
+          SocketContainer signonConnection = PortMapper.getServerSocket((systemNameLocal_) ? "localhost" : systemName_,
+                  AS400.SIGNON, useSSLConnection_, socketProperties_, mustUseNetSockets_);
+          
+          signonServer = new AS400NoThreadServer(this, AS400.SIGNON, signonConnection, "");
+          
+          int connectionID = signonConnection.hashCode();
+
           InputStream inStream = signonConnection.getInputStream();
           OutputStream outStream = signonConnection.getOutputStream();
 
           clientSeed_ = (credVault_.getType() == AS400.AUTHENTICATION_SCHEME_PASSWORD)
-                  ? BinaryConverter.longToByteArray(System.currentTimeMillis())
-                  : null;
+                  ? BinaryConverter.longToByteArray(System.currentTimeMillis()) : null;
 
           SignonExchangeAttributeReq attrReq = new SignonExchangeAttributeReq(AS400Server.getServerId(AS400.SIGNON), clientSeed_);
           if (Trace.traceOn_) attrReq.setConnectionID(connectionID);
