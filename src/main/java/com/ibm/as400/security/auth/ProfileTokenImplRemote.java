@@ -120,7 +120,7 @@ class ProfileTokenImplRemote extends AS400CredentialImplRemote implements Profil
         if (isAAFNull && isVfyIDNull && isRemoteIPNull && isLocalIPNull && remotePort == 0 && remotePort == 0)
             useEPT = false;
 
-        ProgramParameter[] parmlist = new ProgramParameter[useEPT ? 19 : 8];
+        ProgramParameter[] parmlist = new ProgramParameter[useEPT ? 19 : 6];
         
         // Output: Profile token   
         parmlist[0] = new ProgramParameter(ProfileTokenCredential.TOKEN_LENGTH);
