@@ -638,64 +638,64 @@ implements IFSFileDescriptorImpl
   //@AC7 Start
   public String getOwnerName() throws IOException
   {
-	if(fileOwnerName_ == null) {
-		try {
-			connect();
-			IFSListAttrsRep reply = listObjAttrs12(IFSObjAttrs1.OWNER_NAME_FLAG, 0);
-			if (reply != null) {
-				fileOwnerName_ = reply.getOwnerName(system_.getCcsid());
-				if (fileDataCCSID_ == UNINITIALIZED) {
-					fileDataCCSID_ = reply.getCCSID(serverDatastreamLevel_);
-				}
-		    } else {
-		        if (Trace.traceOn_) Trace.log(Trace.WARNING, "getOwnerName: IFSReturnCodeRep return code", errorRC_);
-	        if (errorRC_ == IFSReturnCodeRep.FILE_NOT_FOUND || errorRC_ == IFSReturnCodeRep.PATH_NOT_FOUND)
-	        {
-	          throw new ExtendedIOException(path_, ExtendedIOException.PATH_NOT_FOUND);
-	        }
-	      }
-		} catch (ExtendedIOException e) {
-		    if (e.getReturnCode() == ExtendedIOException.DIR_ENTRY_EXISTS) {
-			    if (Trace.traceOn_) 
-			    	Trace.log(Trace.WARNING, "Unable to determine owner of directory.", e);
-			 }
-			 else 
-				 throw e;
-	    } catch (AS400SecurityException e) {
-	        // The connect() method has already traced the error.
-	        throw new ExtendedIOException(path_, ExtendedIOException.ACCESS_DENIED);
-	    }
-	}	  
-	return (fileOwnerName_ == null ? "" : fileOwnerName_);
+    if(fileOwnerName_ == null) {
+        try {
+            connect();
+            IFSListAttrsRep reply = listObjAttrs12(IFSObjAttrs1.OWNER_NAME_FLAG, 0);
+            if (reply != null) {
+                fileOwnerName_ = reply.getOwnerName(system_.getCcsid());
+                if (fileDataCCSID_ == UNINITIALIZED) {
+                    fileDataCCSID_ = reply.getCCSID(serverDatastreamLevel_);
+                }
+            } else {
+                if (Trace.traceOn_) Trace.log(Trace.WARNING, "getOwnerName: IFSReturnCodeRep return code", errorRC_);
+            if (errorRC_ == IFSReturnCodeRep.FILE_NOT_FOUND || errorRC_ == IFSReturnCodeRep.PATH_NOT_FOUND)
+            {
+              throw new ExtendedIOException(path_, ExtendedIOException.PATH_NOT_FOUND);
+            }
+          }
+        } catch (ExtendedIOException e) {
+            if (e.getReturnCode() == ExtendedIOException.DIR_ENTRY_EXISTS) {
+                if (Trace.traceOn_) 
+                    Trace.log(Trace.WARNING, "Unable to determine owner of directory.", e);
+             }
+             else 
+                 throw e;
+        } catch (AS400SecurityException e) {
+            // The connect() method has already traced the error.
+            throw new ExtendedIOException(path_, ExtendedIOException.ACCESS_DENIED);
+        }
+    }      
+    return (fileOwnerName_ == null ? "" : fileOwnerName_);
    }
 
   public int getCCSID(boolean retrieveAll) throws IOException
-	{
-	  if (fileDataCCSID_ == UNINITIALIZED)
-	    {
-	      try
-	      {
-	        // Ensure that we are connected to the server.
-	        connect();
+    {
+      if (fileDataCCSID_ == UNINITIALIZED)
+        {
+          try
+          {
+            // Ensure that we are connected to the server.
+            connect();
 
-	        IFSListAttrsRep reply = null;
-	        if (retrieveAll)
-	        	reply = listObjAttrs12(IFSObjAttrs1.OWNER_NAME_FLAG, 0);
-	        else 
-	            reply = listObjAttrs2();  // the 'ccsid' field is in the OA2 structure
-	        if (reply != null) {
-	          fileDataCCSID_ = reply.getCCSID(serverDatastreamLevel_);
-	          if (retrieveAll && fileOwnerName_ == null)
-	        	  fileOwnerName_ = reply.getOwnerName(system_.getCcsid());
-	        }
-	      }
-	      catch (AS400SecurityException e) {
-	        // The connect() method has already traced the error.
-	        throw new ExtendedIOException(path_, ExtendedIOException.ACCESS_DENIED);
-	      }
-	    }
-	    return fileDataCCSID_;
-	}
+            IFSListAttrsRep reply = null;
+            if (retrieveAll)
+                reply = listObjAttrs12(IFSObjAttrs1.OWNER_NAME_FLAG, 0);
+            else 
+                reply = listObjAttrs2();  // the 'ccsid' field is in the OA2 structure
+            if (reply != null) {
+              fileDataCCSID_ = reply.getCCSID(serverDatastreamLevel_);
+              if (retrieveAll && fileOwnerName_ == null)
+                  fileOwnerName_ = reply.getOwnerName(system_.getCcsid());
+            }
+          }
+          catch (AS400SecurityException e) {
+            // The connect() method has already traced the error.
+            throw new ExtendedIOException(path_, ExtendedIOException.ACCESS_DENIED);
+          }
+        }
+        return fileDataCCSID_;
+    }
    //@AC7 End
 
 
@@ -727,7 +727,7 @@ implements IFSFileDescriptorImpl
   
   //@SCa @V4C User handle need to be free every time after the attr has been retrieve. Otherwise there may cause other problems. See cps ARUTDV
   public int getCCSIDByUserHandle() throws IOException, AS400SecurityException{
-	  isDirectory_ = true; //@AC7A 
+      isDirectory_ = true; //@AC7A 
     if (fileDataCCSID_ == UNINITIALIZED)
     {
       ClientAccessDataStream ds = null;
@@ -1013,7 +1013,7 @@ implements IFSFileDescriptorImpl
   //@AC7A Start
   IFSListAttrsRep listObjAttrs12(int flags1, int flags2) throws IOException, AS400SecurityException
   {
-	return listObjAttrs(IFSListAttrsReq.OA12, flags1, flags2);
+    return listObjAttrs(IFSListAttrsReq.OA12, flags1, flags2);
   }
   //@AC7A End
 
@@ -1773,8 +1773,8 @@ implements IFSFileDescriptorImpl
   
    //@AC7A Start
   public int getASP(boolean isDirectory) throws IOException, AS400SecurityException {
-	  isDirectory_ = isDirectory;
-	  return getASP();
+      isDirectory_ = isDirectory;
+      return getASP();
   }
   //@AC7A End
   
@@ -1797,8 +1797,8 @@ implements IFSFileDescriptorImpl
         {
           // Issue a Look up request to create an object handle.
           //IFSLookupReq req = new IFSLookupReq(pathname, preferredServerCCSID_, userHandle, IFSLookupReq.OA1, IFSLookupReq.ASP_FLAG, 0);
-        	IFSLookupReq req = new IFSLookupReq(pathname, preferredServerCCSID_, userHandle, IFSLookupReq.OA12, IFSObjAttrs1.OWNERANAME_ASP_FLAS, 0); //@AC7A 
-        	ds = (ClientAccessDataStream) server_.sendAndReceive(req);
+            IFSLookupReq req = new IFSLookupReq(pathname, preferredServerCCSID_, userHandle, IFSLookupReq.OA12, IFSObjAttrs1.OWNERANAME_ASP_FLAS, 0); //@AC7A 
+            ds = (ClientAccessDataStream) server_.sendAndReceive(req);
         }
         catch(ConnectionDroppedException e)
         {
@@ -1851,13 +1851,13 @@ implements IFSFileDescriptorImpl
   
 //@AC7A Start
   public String getOwnerNameByUserHandle(boolean forceRetrieve) throws IOException, AS400SecurityException {
-	  Trace.log(Trace.INFORMATION, "Owner Name " + (fileOwnerName_ == null? "is null" : fileOwnerName_));
-	  isDirectory_ = true;
-	  if (forceRetrieve || fileOwnerName_ == null) {
-		  Trace.log(Trace.INFORMATION, "force retrieve for Owner Name.");
-		  fileOwnerName_ = getOwnerNameByUserHandle();
-	  }
-	  return fileOwnerName_;
+      Trace.log(Trace.INFORMATION, "Owner Name " + (fileOwnerName_ == null? "is null" : fileOwnerName_));
+      isDirectory_ = true;
+      if (forceRetrieve || fileOwnerName_ == null) {
+          Trace.log(Trace.INFORMATION, "force retrieve for Owner Name.");
+          fileOwnerName_ = getOwnerNameByUserHandle();
+      }
+      return fileOwnerName_;
   }
 //@AC7A End
 
@@ -1878,8 +1878,8 @@ implements IFSFileDescriptorImpl
       {
         // Issue a Look up request to create an object handle.
         //IFSLookupReq req = new IFSLookupReq(pathname, preferredServerCCSID_, userHandle, IFSLookupReq.OA1, IFSObjAttrs1.OWNER_NAME_FLAG, 0); //@AC7A End
-    	  IFSLookupReq req = new IFSLookupReq(pathname, preferredServerCCSID_, userHandle, IFSLookupReq.OA12, IFSObjAttrs1.OWNERANAME_ASP_FLAS, 0); //@AC7A 
-    	  ds = (ClientAccessDataStream) server_.sendAndReceive(req);
+          IFSLookupReq req = new IFSLookupReq(pathname, preferredServerCCSID_, userHandle, IFSLookupReq.OA12, IFSObjAttrs1.OWNERANAME_ASP_FLAS, 0); //@AC7A 
+          ds = (ClientAccessDataStream) server_.sendAndReceive(req);
       }
       catch(ConnectionDroppedException e)
       {
@@ -1932,8 +1932,8 @@ implements IFSFileDescriptorImpl
   
 //@AC7A Start
   public String getFileSystemType(boolean isDirectory) throws IOException, AS400SecurityException {
-	  isDirectory_ = isDirectory;
-	  return getFileSystemType();
+      isDirectory_ = isDirectory;
+      return getFileSystemType();
   }
 //@AC7A End
   
@@ -1957,7 +1957,7 @@ implements IFSFileDescriptorImpl
         {
           // Issue a Look up request to create an object handle.
           //IFSLookupReq req = new IFSLookupReq(pathname, preferredServerCCSID_, userHandle); //@AC7D
-        	IFSLookupReq req = new IFSLookupReq(pathname, preferredServerCCSID_, userHandle, IFSLookupReq.OA12, IFSObjAttrs1.OWNERANAME_ASP_FLAS, 0); //@AC7A Start
+            IFSLookupReq req = new IFSLookupReq(pathname, preferredServerCCSID_, userHandle, IFSLookupReq.OA12, IFSObjAttrs1.OWNERANAME_ASP_FLAS, 0); //@AC7A Start
           ds = (ClientAccessDataStream) server_.sendAndReceive(req);
         }
         catch(ConnectionDroppedException e)
@@ -2072,57 +2072,57 @@ implements IFSFileDescriptorImpl
 
   //@AC7A Start
   private void retrieveAttributes(ClientAccessDataStream ds, int objectHandle) throws IOException, AS400SecurityException {
-		  fileAsp_ = ((IFSLookupRep) ds).getASP();
-		  //if (isDirectory_) { @AE8D
-			  fileOwnerName_ = ((IFSLookupRep) ds).getOwnerName(system_.getCcsid());
-			  fileDataCCSID_ = ((IFSLookupRep) ds).getCCSID(serverDatastreamLevel_);
-		  //}
-		  int userHandle = system_.getUserHandle();		 
-		  int rc = 0;
-		  ds = null;
-	        try
-	        {
-	          // Issue a get file system request.
-	          IFSGetFileSystemReq req = new IFSGetFileSystemReq(objectHandle, userHandle);
-	          ds = (ClientAccessDataStream) server_.sendAndReceive(req);
-	        }
-	        catch(ConnectionDroppedException e)
-	        {
-	          Trace.log(Trace.ERROR, "Byte stream server connection lost.");
-	          connectionDropped(e);
-	        }
-	        catch(InterruptedException e)
-	        {
-	          Trace.log(Trace.ERROR, "Interrupted");
-	          InterruptedIOException throwException = new InterruptedIOException(e.getMessage());
-	          throwException.initCause(e);
-	          throw throwException;
-	        }
+          fileAsp_ = ((IFSLookupRep) ds).getASP();
+          //if (isDirectory_) { @AE8D
+              fileOwnerName_ = ((IFSLookupRep) ds).getOwnerName(system_.getCcsid());
+              fileDataCCSID_ = ((IFSLookupRep) ds).getCCSID(serverDatastreamLevel_);
+          //}
+          int userHandle = system_.getUserHandle();         
+          int rc = 0;
+          ds = null;
+            try
+            {
+              // Issue a get file system request.
+              IFSGetFileSystemReq req = new IFSGetFileSystemReq(objectHandle, userHandle);
+              ds = (ClientAccessDataStream) server_.sendAndReceive(req);
+            }
+            catch(ConnectionDroppedException e)
+            {
+              Trace.log(Trace.ERROR, "Byte stream server connection lost.");
+              connectionDropped(e);
+            }
+            catch(InterruptedException e)
+            {
+              Trace.log(Trace.ERROR, "Interrupted");
+              InterruptedIOException throwException = new InterruptedIOException(e.getMessage());
+              throwException.initCause(e);
+              throw throwException;
+            }
 
-	        // Verify the reply.
-	        rc = 0;
-	        if (ds instanceof IFSGetFileSystemRep)
-	        {
-	          fileSystemType_ = ((IFSGetFileSystemRep) ds).getFileSystemType();
-	        }
-	        else if (ds instanceof IFSReturnCodeRep)
-	        {
-	          rc = ((IFSReturnCodeRep) ds).getReturnCode();
-	          if (rc != IFSReturnCodeRep.SUCCESS)
-	          {
-	            Trace.log(Trace.ERROR, "IFSReturnCodeRep return code", rc);
-	          }
-	          throw new ExtendedIOException(path_, rc);
-	        }
-	        else
-	        {
-	          // Unknown data stream.
-	          Trace.log(Trace.ERROR, "Unknown reply data stream",
-	              ds.getReqRepID());
-	          throw new
-	          InternalErrorException(InternalErrorException.DATA_STREAM_UNKNOWN,
-	              Integer.toHexString(ds.getReqRepID()),null);
-	        }
+            // Verify the reply.
+            rc = 0;
+            if (ds instanceof IFSGetFileSystemRep)
+            {
+              fileSystemType_ = ((IFSGetFileSystemRep) ds).getFileSystemType();
+            }
+            else if (ds instanceof IFSReturnCodeRep)
+            {
+              rc = ((IFSReturnCodeRep) ds).getReturnCode();
+              if (rc != IFSReturnCodeRep.SUCCESS)
+              {
+                Trace.log(Trace.ERROR, "IFSReturnCodeRep return code", rc);
+              }
+              throw new ExtendedIOException(path_, rc);
+            }
+            else
+            {
+              // Unknown data stream.
+              Trace.log(Trace.ERROR, "Unknown reply data stream",
+                  ds.getReqRepID());
+              throw new
+              InternalErrorException(InternalErrorException.DATA_STREAM_UNKNOWN,
+                  Integer.toHexString(ds.getReqRepID()),null);
+            }
   }
   //@AC7A End
 
