@@ -726,74 +726,70 @@ implements IFSFileDescriptorImpl
   }
   
   //@SCa @V4C User handle need to be free every time after the attr has been retrieve. Otherwise there may cause other problems. See cps ARUTDV
-  public int getCCSIDByUserHandle() throws IOException, AS400SecurityException{
-      isDirectory_ = true; //@AC7A 
-    if (fileDataCCSID_ == UNINITIALIZED)
-    {
-      ClientAccessDataStream ds = null;
-
-      connect();
+  public int getCCSIDByUserHandle() throws IOException, AS400SecurityException
+  {
+      isDirectory_ = true;
       
-      //create user handle
-      int userHandle = UNINITIALIZED, objectHandle = UNINITIALIZED;
-      try{
-        userHandle = system_.createUserHandle();
+      if (fileDataCCSID_ == UNINITIALIZED)
+      {
+          ClientAccessDataStream ds = null;
 
-        try
-        {
-          byte[] path = getConverter().stringToByteArray(path_);
-
-          //IFSLookupReq req = new IFSLookupReq(path, preferredServerCCSID_, userHandle, IFSLookupReq.OA2, 0, 0);
-          IFSLookupReq req = new IFSLookupReq(path, preferredServerCCSID_, userHandle, IFSLookupReq.OA12, IFSObjAttrs1.OWNERANAME_ASP_FLAS, 0); //@AC7A
-          ds = (ClientAccessDataStream) server_.sendAndReceive(req);
-        }
-        catch(ConnectionDroppedException e)
-        {
-          Trace.log(Trace.ERROR, "Byte stream server connection lost.");
-          connectionDropped(e);
-        }
-        catch(InterruptedException e)
-        {
-          Trace.log(Trace.ERROR, "Interrupted");
-          InterruptedIOException throwException = new InterruptedIOException(e.getMessage());
-          throwException.initCause(e);
-          throw throwException;
-        }
-
-        int rc = 0;
-        if (ds instanceof IFSLookupRep)
-        {
-          //fileDataCCSID_ = ((IFSLookupRep) ds).getCCSID(serverDatastreamLevel_);  //@AC7D
-          objectHandle = ((IFSLookupRep) ds).getHandle();
-          retrieveAttributes(ds, objectHandle);  //@AC7A 
-        }
-        else if (ds instanceof IFSReturnCodeRep)
-        {
-          rc = ((IFSReturnCodeRep) ds).getReturnCode();
-          if (rc != IFSReturnCodeRep.SUCCESS)
+          connect();
+      
+          //create user handle
+          int userHandle = UNINITIALIZED, objectHandle = UNINITIALIZED;
+          try
           {
-            Trace.log(Trace.ERROR, "IFSReturnCodeRep return code", rc);
+              userHandle = (getSystem().getVRM() <= 0x00070500) ? system_.createUserHandle() : 0;
+
+              try
+              {
+                  byte[] path = getConverter().stringToByteArray(path_);
+
+                  IFSLookupReq req = new IFSLookupReq(path, preferredServerCCSID_, userHandle, IFSLookupReq.OA12, IFSObjAttrs1.OWNERANAME_ASP_FLAS, 0); //@AC7A
+                  ds = (ClientAccessDataStream) server_.sendAndReceive(req);
+              }
+              catch(ConnectionDroppedException e)
+              {
+                  Trace.log(Trace.ERROR, "Byte stream server connection lost.");
+                  connectionDropped(e);
+              }
+              catch(InterruptedException e)
+              {
+                  Trace.log(Trace.ERROR, "Interrupted");
+                  InterruptedIOException throwException = new InterruptedIOException(e.getMessage());
+                  throwException.initCause(e);
+                  throw throwException;
+              }
+
+              int rc = 0;
+              if (ds instanceof IFSLookupRep)
+              {
+                  objectHandle = ((IFSLookupRep) ds).getHandle();
+                  retrieveAttributes(ds, objectHandle);  //@AC7A 
+              }
+              else if (ds instanceof IFSReturnCodeRep)
+              {
+                  rc = ((IFSReturnCodeRep) ds).getReturnCode();
+                  if (rc != IFSReturnCodeRep.SUCCESS) Trace.log(Trace.ERROR, "IFSReturnCodeRep return code", rc);
+
+                  throw new ExtendedIOException(path_, rc);
+              }
+              else
+              {
+                  // Unknown data stream.
+                  Trace.log(Trace.ERROR, "Unknown reply data stream", ds.getReqRepID());
+                  throw new InternalErrorException(Integer.toHexString(ds.getReqRepID()), InternalErrorException.DATA_STREAM_UNKNOWN);
+              }
           }
-          throw new ExtendedIOException(path_, rc);
-        }
-        else
-        {
-          // Unknown data stream.
-          Trace.log(Trace.ERROR, "Unknown reply data stream",
-              ds.getReqRepID());
-          throw new
-          InternalErrorException(Integer.toHexString(ds.getReqRepID()),
-              InternalErrorException.DATA_STREAM_UNKNOWN);
-        }
-      }finally{
-         // if(userHandle != UNINITIALIZED)
-           // freeUserHandle(userHandle);
-          if(objectHandle != UNINITIALIZED)
-            freeHandle(objectHandle);
+          finally
+          {
+              if (objectHandle != UNINITIALIZED)
+                  freeHandle(objectHandle);
+          }
       }
       
-    }
-    return fileDataCCSID_;
+      return fileDataCCSID_;
   }
 
   int getFileHandle()
@@ -1778,282 +1774,225 @@ implements IFSFileDescriptorImpl
   }
   //@AC7A End
   
-  public int getASP() throws IOException, AS400SecurityException {
-    if (fileAsp_ == UNINITIALIZED)
-    { 
-      ClientAccessDataStream ds = null;
-      int rc = 0;
+  public int getASP() throws IOException, AS400SecurityException 
+  {
+      if (fileAsp_ == UNINITIALIZED)
+      { 
+          ClientAccessDataStream ds = null;
+          int rc = 0;
 
-      connect();
+          connect();
 
-      // Ensure that we are connected to the server.
-      byte[] pathname = getConverter().stringToByteArray(path_);
+          // Ensure that we are connected to the server.
+          byte[] pathname = getConverter().stringToByteArray(path_);
 
-      //create user handle
-      int userHandle = UNINITIALIZED, objectHandle = UNINITIALIZED;
-      try{
-        userHandle = system_.createUserHandle();
-        try
-        {
-          // Issue a Look up request to create an object handle.
-          //IFSLookupReq req = new IFSLookupReq(pathname, preferredServerCCSID_, userHandle, IFSLookupReq.OA1, IFSLookupReq.ASP_FLAG, 0);
-            IFSLookupReq req = new IFSLookupReq(pathname, preferredServerCCSID_, userHandle, IFSLookupReq.OA12, IFSObjAttrs1.OWNERANAME_ASP_FLAS, 0); //@AC7A 
-            ds = (ClientAccessDataStream) server_.sendAndReceive(req);
-        }
-        catch(ConnectionDroppedException e)
-        {
-          Trace.log(Trace.ERROR, "Byte stream server connection lost.");
-          connectionDropped(e);
-        }
-        catch(InterruptedException e)
-        {
-          Trace.log(Trace.ERROR, "Interrupted");
-          InterruptedIOException throwException = new InterruptedIOException(e.getMessage());
-          throwException.initCause(e);
-          throw throwException;
-        }
-
-        rc = 0;
-        if (ds instanceof IFSLookupRep)
-        {
-          objectHandle = ((IFSLookupRep) ds).getHandle();
-          //fileAsp_ = ((IFSLookupRep) ds).getASP();  //@AC7D
-          retrieveAttributes(ds, objectHandle);  //@AC7A 
-        }
-        else if (ds instanceof IFSReturnCodeRep)
-        {
-          rc = ((IFSReturnCodeRep) ds).getReturnCode();
-          if (rc != IFSReturnCodeRep.SUCCESS)
+          //create user handle
+          int userHandle = UNINITIALIZED, objectHandle = UNINITIALIZED;
+          try
           {
-            Trace.log(Trace.ERROR, "IFSReturnCodeRep return code", rc);
-          }
-          throw new ExtendedIOException(path_, rc);
-        }
-        else
-        {
-          // Unknown data stream.
-          Trace.log(Trace.ERROR, "Unknown reply data stream",
-              ds.getReqRepID());
-          throw new
-          InternalErrorException(Integer.toHexString(ds.getReqRepID()),
-              InternalErrorException.DATA_STREAM_UNKNOWN);
-        }
-      }finally{
-        //if(userHandle != UNINITIALIZED)
-         // freeUserHandle(userHandle);
-        if(objectHandle != UNINITIALIZED)
-          freeHandle(objectHandle);
-      }
-    }
+              userHandle = (getSystem().getVRM() <= 0x00070500) ? system_.createUserHandle() : 0;
+              
+              try
+              {
+                  // Issue a Look up request to create an object handle.
+                  IFSLookupReq req = new IFSLookupReq(pathname, preferredServerCCSID_, userHandle, IFSLookupReq.OA12, IFSObjAttrs1.OWNERANAME_ASP_FLAS, 0); //@AC7A 
+                  ds = (ClientAccessDataStream) server_.sendAndReceive(req);
+              }
+              catch(ConnectionDroppedException e)
+              {
+                  Trace.log(Trace.ERROR, "Byte stream server connection lost.");
+                  connectionDropped(e);
+              }
+              catch(InterruptedException e)
+              {
+                  Trace.log(Trace.ERROR, "Interrupted");
+                  InterruptedIOException throwException = new InterruptedIOException(e.getMessage());
+                  throwException.initCause(e);
+                  throw throwException;
+              }
 
-    return fileAsp_;
+              rc = 0;
+              if (ds instanceof IFSLookupRep)
+              {
+                  objectHandle = ((IFSLookupRep) ds).getHandle();
+                  retrieveAttributes(ds, objectHandle);  //@AC7A 
+              }
+              else if (ds instanceof IFSReturnCodeRep)
+              {
+                  rc = ((IFSReturnCodeRep) ds).getReturnCode();
+                  if (rc != IFSReturnCodeRep.SUCCESS)
+                      Trace.log(Trace.ERROR, "IFSReturnCodeRep return code", rc);
+
+                  throw new ExtendedIOException(path_, rc);
+              }
+              else
+              {
+                  // Unknown data stream.
+                  Trace.log(Trace.ERROR, "Unknown reply data stream", ds.getReqRepID());
+                  throw new InternalErrorException(Integer.toHexString(ds.getReqRepID()), InternalErrorException.DATA_STREAM_UNKNOWN);
+              }
+          }
+          finally
+          {
+              if (objectHandle != UNINITIALIZED)
+                  freeHandle(objectHandle);
+          }
+      }
+
+      return fileAsp_;
   }
   
-//@AC7A Start
-  public String getOwnerNameByUserHandle(boolean forceRetrieve) throws IOException, AS400SecurityException {
+  public String getOwnerNameByUserHandle(boolean forceRetrieve) throws IOException, AS400SecurityException
+  {
       Trace.log(Trace.INFORMATION, "Owner Name " + (fileOwnerName_ == null? "is null" : fileOwnerName_));
       isDirectory_ = true;
-      if (forceRetrieve || fileOwnerName_ == null) {
+      if (forceRetrieve || fileOwnerName_ == null)
+      {
           Trace.log(Trace.INFORMATION, "force retrieve for Owner Name.");
           fileOwnerName_ = getOwnerNameByUserHandle();
       }
+      
       return fileOwnerName_;
   }
-//@AC7A End
 
-  public String getOwnerNameByUserHandle() throws IOException, AS400SecurityException {
-    //String ownerName = null; //@AC7D 
-    ClientAccessDataStream ds = null;
-    int rc = 0;
+  public String getOwnerNameByUserHandle() throws IOException, AS400SecurityException
+  {
+      ClientAccessDataStream ds = null;
+      int rc = 0;
 
-    // Ensure that we are connected to the server.
-    connect();
-    byte[] pathname = getConverter().stringToByteArray(path_);
+      // Ensure that we are connected to the server.
+      connect();
+      byte[] pathname = getConverter().stringToByteArray(path_);
     
-    //create user handle
-    int userHandle = UNINITIALIZED, objectHandle = UNINITIALIZED;
-    try{
-      userHandle = system_.createUserHandle();
+      //create user handle
+      int userHandle = UNINITIALIZED, objectHandle = UNINITIALIZED;
       try
       {
-        // Issue a Look up request to create an object handle.
-        //IFSLookupReq req = new IFSLookupReq(pathname, preferredServerCCSID_, userHandle, IFSLookupReq.OA1, IFSObjAttrs1.OWNER_NAME_FLAG, 0); //@AC7A End
-          IFSLookupReq req = new IFSLookupReq(pathname, preferredServerCCSID_, userHandle, IFSLookupReq.OA12, IFSObjAttrs1.OWNERANAME_ASP_FLAS, 0); //@AC7A 
-          ds = (ClientAccessDataStream) server_.sendAndReceive(req);
+          userHandle = (getSystem().getVRM() <= 0x00070500) ? system_.createUserHandle() : 0;
+          
+          try
+          {
+              // Issue a Look up request to create an object handle.
+              IFSLookupReq req = new IFSLookupReq(pathname, preferredServerCCSID_, userHandle, IFSLookupReq.OA12, IFSObjAttrs1.OWNERANAME_ASP_FLAS, 0); //@AC7A 
+              ds = (ClientAccessDataStream) server_.sendAndReceive(req);
+          }
+          catch(ConnectionDroppedException e)
+          {
+              Trace.log(Trace.ERROR, "Byte stream server connection lost.");
+              connectionDropped(e);
+          }
+          catch(InterruptedException e)
+          {
+              Trace.log(Trace.ERROR, "Interrupted");
+              InterruptedIOException throwException = new InterruptedIOException(e.getMessage());
+              throwException.initCause(e);
+              throw throwException;
+          }
+
+          // Verify that we got a handle back.
+          rc = 0;
+          if (ds instanceof IFSLookupRep)
+          {
+              //ownerName = ((IFSLookupRep) ds).getOwnerName(system_.getCcsid());  //@AC7A End
+              objectHandle = ((IFSLookupRep) ds).getHandle();
+              retrieveAttributes(ds, objectHandle);  //@AC7A
+          }
+          else if (ds instanceof IFSReturnCodeRep)
+          {
+              rc = ((IFSReturnCodeRep) ds).getReturnCode();
+              if (rc != IFSReturnCodeRep.SUCCESS) Trace.log(Trace.ERROR, "IFSReturnCodeRep return code", rc);
+              throw new ExtendedIOException(path_, rc);
+          } 
+          else
+          {
+              // Unknown data stream.
+              Trace.log(Trace.ERROR, "Unknown reply data stream", ds.getReqRepID());
+              throw new InternalErrorException(Integer.toHexString(ds.getReqRepID()), InternalErrorException.DATA_STREAM_UNKNOWN);
+          }
       }
-      catch(ConnectionDroppedException e)
+      finally
       {
-        Trace.log(Trace.ERROR, "Byte stream server connection lost.");
-        connectionDropped(e);
-      }
-      catch(InterruptedException e)
-      {
-        Trace.log(Trace.ERROR, "Interrupted");
-        InterruptedIOException throwException = new InterruptedIOException(e.getMessage());
-        throwException.initCause(e);
-        throw throwException;
+          if(objectHandle != UNINITIALIZED)
+              freeHandle(objectHandle);
       }
 
-      // Verify that we got a handle back.
-      rc = 0;
-      if (ds instanceof IFSLookupRep)
-      {
-        //ownerName = ((IFSLookupRep) ds).getOwnerName(system_.getCcsid());  //@AC7A End
-        objectHandle = ((IFSLookupRep) ds).getHandle();
-        retrieveAttributes(ds, objectHandle);  //@AC7A
-      }
-      else if (ds instanceof IFSReturnCodeRep)
-      {
-        rc = ((IFSReturnCodeRep) ds).getReturnCode();
-        if (rc != IFSReturnCodeRep.SUCCESS)
-        {
-          Trace.log(Trace.ERROR, "IFSReturnCodeRep return code", rc);
-        }
-        throw new ExtendedIOException(path_, rc);
-      }
-      else
-      {
-        // Unknown data stream.
-        Trace.log(Trace.ERROR, "Unknown reply data stream",
-            ds.getReqRepID());
-        throw new
-        InternalErrorException(Integer.toHexString(ds.getReqRepID()),
-            InternalErrorException.DATA_STREAM_UNKNOWN);
-      }
-    }finally{
-     // if(userHandle != UNINITIALIZED)
-       // freeUserHandle(userHandle);
-      if(objectHandle != UNINITIALIZED)
-        freeHandle(objectHandle);
-    }
-    //return (ownerName == null ? "" : ownerName);  //@AC7D 
-    return (fileOwnerName_ == null ? "" : fileOwnerName_);  //@AC7A 
+      return (fileOwnerName_ == null ? "" : fileOwnerName_);  //@AC7A 
   }
   
-//@AC7A Start
-  public String getFileSystemType(boolean isDirectory) throws IOException, AS400SecurityException {
+  public String getFileSystemType(boolean isDirectory) throws IOException, AS400SecurityException
+  {
       isDirectory_ = isDirectory;
       return getFileSystemType();
   }
-//@AC7A End
   
-  public String getFileSystemType() throws IOException, AS400SecurityException {
-    String typeString = "Unknown";
+  public String getFileSystemType() throws IOException, AS400SecurityException
+  {
+      String typeString = "Unknown";
     
-    if (fileSystemType_ == UNINITIALIZED)
-    {
-      ClientAccessDataStream ds = null;
-      int rc = 0;
-      connect();
+      if (fileSystemType_ == UNINITIALIZED)
+      {
+          ClientAccessDataStream ds = null;
+          int rc = 0;
+          connect();
 
-      int objectHandle = UNINITIALIZED;
-      byte[] pathname = getConverter().stringToByteArray(path_);
+          int objectHandle = UNINITIALIZED;
+          byte[] pathname = getConverter().stringToByteArray(path_);
 
-      //create user handle
-      int userHandle = UNINITIALIZED;
-      try{
-        userHandle = system_.createUserHandle();
-        try
-        {
-          // Issue a Look up request to create an object handle.
-          //IFSLookupReq req = new IFSLookupReq(pathname, preferredServerCCSID_, userHandle); //@AC7D
-            IFSLookupReq req = new IFSLookupReq(pathname, preferredServerCCSID_, userHandle, IFSLookupReq.OA12, IFSObjAttrs1.OWNERANAME_ASP_FLAS, 0); //@AC7A Start
-          ds = (ClientAccessDataStream) server_.sendAndReceive(req);
-        }
-        catch(ConnectionDroppedException e)
-        {
-          Trace.log(Trace.ERROR, "Byte stream server connection lost.");
-          connectionDropped(e);
-        }
-        catch(InterruptedException e)
-        {
-          Trace.log(Trace.ERROR, "Interrupted");
-          InterruptedIOException throwException = new InterruptedIOException(e.getMessage());
-          throwException.initCause(e);
-          throw throwException;
-        }
-
-        rc = 0;
-        if (ds instanceof IFSLookupRep)
-        {
-          objectHandle = ((IFSLookupRep) ds).getHandle();
-          retrieveAttributes(ds, objectHandle); //@AC7A 
-        }
-        else if (ds instanceof IFSReturnCodeRep)
-        {
-          rc = ((IFSReturnCodeRep) ds).getReturnCode();
-          if (rc != IFSReturnCodeRep.SUCCESS)
+          //create user handle
+          int userHandle = UNINITIALIZED;
+          try
           {
-            Trace.log(Trace.ERROR, "IFSReturnCodeRep return code", rc);
+              userHandle = (getSystem().getVRM() <= 0x00070500) ? system_.createUserHandle() : 0;
+              
+              try
+              {
+                  // Issue a Look up request to create an object handle.
+                  IFSLookupReq req = new IFSLookupReq(pathname, preferredServerCCSID_, userHandle, IFSLookupReq.OA12, IFSObjAttrs1.OWNERANAME_ASP_FLAS, 0);
+                  ds = (ClientAccessDataStream) server_.sendAndReceive(req);
+              }
+              catch(ConnectionDroppedException e)
+              {
+                  Trace.log(Trace.ERROR, "Byte stream server connection lost.");
+                  connectionDropped(e);
+              }
+              catch(InterruptedException e)
+              {
+                  Trace.log(Trace.ERROR, "Interrupted");
+                  InterruptedIOException throwException = new InterruptedIOException(e.getMessage());
+                  throwException.initCause(e);
+                  throw throwException;
+              }
+
+              rc = 0;
+              if (ds instanceof IFSLookupRep)
+              {
+                  objectHandle = ((IFSLookupRep) ds).getHandle();
+                  retrieveAttributes(ds, objectHandle); //@AC7A 
+              }
+              else if (ds instanceof IFSReturnCodeRep)
+              {
+                  rc = ((IFSReturnCodeRep) ds).getReturnCode();
+                  if (rc != IFSReturnCodeRep.SUCCESS)
+                      Trace.log(Trace.ERROR, "IFSReturnCodeRep return code", rc);
+
+                  throw new ExtendedIOException(path_, rc);
+              }
+              else
+              {
+                  // Unknown data stream.
+                  Trace.log(Trace.ERROR, "Unknown reply data stream", ds.getReqRepID());
+                  throw new InternalErrorException(Integer.toHexString(ds.getReqRepID()), InternalErrorException.DATA_STREAM_UNKNOWN);
+              }
           }
-          throw new ExtendedIOException(path_, rc);
-        }
-        else
-        {
-          // Unknown data stream.
-          Trace.log(Trace.ERROR, "Unknown reply data stream",
-              ds.getReqRepID());
-          throw new
-          InternalErrorException(Integer.toHexString(ds.getReqRepID()),
-              InternalErrorException.DATA_STREAM_UNKNOWN);
-        }
-
-        /* //@AC7D Start
-        ds = null;
-        try
-        {
-          // Issue a get file system request.
-          IFSGetFileSystemReq req = new IFSGetFileSystemReq(objectHandle, userHandle);
-          ds = (ClientAccessDataStream) server_.sendAndReceive(req);
-        }
-        catch(ConnectionDroppedException e)
-        {
-          Trace.log(Trace.ERROR, "Byte stream server connection lost.");
-          connectionDropped(e);
-        }
-        catch(InterruptedException e)
-        {
-          Trace.log(Trace.ERROR, "Interrupted");
-          InterruptedIOException throwException = new InterruptedIOException(e.getMessage());
-          try {
-            throwException.initCause(e);
-          } catch (Throwable t) {} 
-          throw throwException;
-        }
-
-        // Verify the reply.
-        rc = 0;
-        if (ds instanceof IFSGetFileSystemRep)
-        {
-          fileSystemType_ = ((IFSGetFileSystemRep) ds).getFileSystemType();
-        }
-        else if (ds instanceof IFSReturnCodeRep)
-        {
-          rc = ((IFSReturnCodeRep) ds).getReturnCode();
-          if (rc != IFSReturnCodeRep.SUCCESS)
+          finally
           {
-            Trace.log(Trace.ERROR, "IFSReturnCodeRep return code", rc);
+              if (objectHandle != UNINITIALIZED)
+                  freeHandle(objectHandle);
           }
-          throw new ExtendedIOException(path_, rc);
-        }
-        else
-        {
-          // Unknown data stream.
-          Trace.log(Trace.ERROR, "Unknown reply data stream",
-              ds.getReqRepID());
-          throw new
-          InternalErrorException(InternalErrorException.DATA_STREAM_UNKNOWN,
-              Integer.toHexString(ds.getReqRepID()),null);
-        }
-        */ //@AC7D Start
-      }finally{
-        //if(userHandle != UNINITIALIZED)
-         // freeUserHandle(userHandle);
-        if(objectHandle != UNINITIALIZED)
-          freeHandle(objectHandle);
       }
-    }
-    switch(fileSystemType_) {
+      
+    switch(fileSystemType_)
+    {
         case 1 : typeString = "EPFS"; break;
         case 2 : typeString = "QDLS"; break;
         case 3 : typeString = "QSYS"; break;
@@ -2067,65 +2006,55 @@ implements IFSFileDescriptorImpl
         case 13 : typeString = "IEPFS"; break;
         case 14 : typeString = "ASPQSYS"; break;
     }
+    
     return typeString;
   }
 
-  //@AC7A Start
-  private void retrieveAttributes(ClientAccessDataStream ds, int objectHandle) throws IOException, AS400SecurityException {
-          fileAsp_ = ((IFSLookupRep) ds).getASP();
-          //if (isDirectory_) { @AE8D
-              fileOwnerName_ = ((IFSLookupRep) ds).getOwnerName(system_.getCcsid());
-              fileDataCCSID_ = ((IFSLookupRep) ds).getCCSID(serverDatastreamLevel_);
-          //}
-          int userHandle = system_.getUserHandle();         
-          int rc = 0;
-          ds = null;
-            try
-            {
-              // Issue a get file system request.
-              IFSGetFileSystemReq req = new IFSGetFileSystemReq(objectHandle, userHandle);
-              ds = (ClientAccessDataStream) server_.sendAndReceive(req);
-            }
-            catch(ConnectionDroppedException e)
-            {
-              Trace.log(Trace.ERROR, "Byte stream server connection lost.");
-              connectionDropped(e);
-            }
-            catch(InterruptedException e)
-            {
-              Trace.log(Trace.ERROR, "Interrupted");
-              InterruptedIOException throwException = new InterruptedIOException(e.getMessage());
-              throwException.initCause(e);
-              throw throwException;
-            }
+  private void retrieveAttributes(ClientAccessDataStream ds, int objectHandle) throws IOException, AS400SecurityException
+  {
+      fileAsp_ = ((IFSLookupRep) ds).getASP();
+      fileOwnerName_ = ((IFSLookupRep) ds).getOwnerName(system_.getCcsid());
+      fileDataCCSID_ = ((IFSLookupRep) ds).getCCSID(serverDatastreamLevel_);
 
-            // Verify the reply.
-            rc = 0;
-            if (ds instanceof IFSGetFileSystemRep)
-            {
-              fileSystemType_ = ((IFSGetFileSystemRep) ds).getFileSystemType();
-            }
-            else if (ds instanceof IFSReturnCodeRep)
-            {
-              rc = ((IFSReturnCodeRep) ds).getReturnCode();
-              if (rc != IFSReturnCodeRep.SUCCESS)
-              {
-                Trace.log(Trace.ERROR, "IFSReturnCodeRep return code", rc);
-              }
-              throw new ExtendedIOException(path_, rc);
-            }
-            else
-            {
-              // Unknown data stream.
-              Trace.log(Trace.ERROR, "Unknown reply data stream",
-                  ds.getReqRepID());
-              throw new
-              InternalErrorException(InternalErrorException.DATA_STREAM_UNKNOWN,
-                  Integer.toHexString(ds.getReqRepID()),null);
-            }
+      int userHandle =  (getSystem().getVRM() <= 0x00070500) ? system_.getUserHandle() : 0;    
+      
+      int rc = 0;
+      ds = null;
+      try
+      {
+          IFSGetFileSystemReq req = new IFSGetFileSystemReq(objectHandle, userHandle);
+          ds = (ClientAccessDataStream) server_.sendAndReceive(req);
+      }
+      catch(ConnectionDroppedException e)
+      {
+          Trace.log(Trace.ERROR, "Byte stream server connection lost.");
+          connectionDropped(e);
+      }
+      catch(InterruptedException e)
+      {
+          Trace.log(Trace.ERROR, "Interrupted");
+          InterruptedIOException throwException = new InterruptedIOException(e.getMessage());
+          throwException.initCause(e);
+          throw throwException;
+      }
+
+      // Verify the reply.
+      rc = 0;
+      if (ds instanceof IFSGetFileSystemRep)
+          fileSystemType_ = ((IFSGetFileSystemRep) ds).getFileSystemType();
+      else if (ds instanceof IFSReturnCodeRep)
+      {
+          rc = ((IFSReturnCodeRep) ds).getReturnCode();
+          if (rc != IFSReturnCodeRep.SUCCESS) Trace.log(Trace.ERROR, "IFSReturnCodeRep return code", rc);
+          throw new ExtendedIOException(path_, rc);
+      }
+      else
+      {
+          // Unknown data stream.
+          Trace.log(Trace.ERROR, "Unknown reply data stream", ds.getReqRepID());
+          throw new InternalErrorException(InternalErrorException.DATA_STREAM_UNKNOWN, Integer.toHexString(ds.getReqRepID()),null);
+      }
   }
-  //@AC7A End
-
 }
 
 
