@@ -145,7 +145,7 @@ public class ProfileTokenImplNative implements ProfileTokenImpl
         }
 
         // Call native method and return token bytes, we rely on the fact this class is only called if running on AS400.
-        if (!ProfileTokenCredential.useEnhancedProfileTokens() || AS400.nativeVRM.getVersionReleaseModification() < 0x00070600)
+        if (!ProfileTokenCredential.useEnhancedProfileTokens() || AS400.nativeVRM.getVersionReleaseModification() <= 0x00070500)
             return nativeCreateTokenChar(uid.toUpperCase(), pwdSpecialVal.toCharArray(), type, timeoutInterval);
 
         return EnhancedProfileTokenImplNative.nativeCreateTokenSpecialPassword(uid.toUpperCase(), pwdSpecialVal.toCharArray(), 

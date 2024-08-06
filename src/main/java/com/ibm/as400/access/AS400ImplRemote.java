@@ -3752,7 +3752,7 @@ public class AS400ImplRemote implements AS400Impl
       // If already have a connection or this object is not secure, or 
       //  hostcnn connect was already tried and failed, simply return. 
       if (!reconnecting)
-          if (hostcnnServer_ != null || useSSLConnection_ == null || (signonInfo_ != null && getVRM() < 0x00070600))
+          if (hostcnnServer_ != null || useSSLConnection_ == null || (signonInfo_ != null && getVRM() <= 0x00070500))
               return;
       
       if (Trace.traceOn_) Trace.log(Trace.DIAGNOSTIC, "Attempting to connect to as-hostcnn server.");
