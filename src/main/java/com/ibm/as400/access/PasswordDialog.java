@@ -47,6 +47,7 @@ public class PasswordDialog extends Dialog
     private TextField systemNameTextField_;
     private TextField userIdTextField_;
     private TextField passwordTextField_;
+    private TextField additionalFactorTextField_;
     private Checkbox defaultUserCheckbox_;
     private Checkbox cachePasswordCheckbox_;
     private Button okButton_;
@@ -59,11 +60,16 @@ public class PasswordDialog extends Dialog
      **/
     public PasswordDialog(Frame parent, String titleText)
     {
-        this(parent, titleText, false);
+        this(parent, titleText, false, false);
     }
 
     PasswordDialog(Frame parent, String titleText, boolean showCheckbox)
     {
+        this(parent, titleText, showCheckbox, false);
+    }
+    
+    PasswordDialog(Frame parent, String titleText, boolean showCheckbox, boolean showAdditionalFactor)
+    {        
         super(parent, titleText, true);
 
         listener_ = new AS400SignonDialogAdapter(this);
@@ -75,42 +81,51 @@ public class PasswordDialog extends Dialog
         constraints.insets = new Insets(8, 8, 0, 8);
         setLayout(layout);
 
-        setResizable(false);
+        setResizable(true);
 
         // Set the background color to light gray.
         setBackground(Color.lightGray);
 
-        // Create the 'System:' Label and add to the panel.
+        // Create the 'System:' Label and text field
         Label label = new Label(ResourceBundleLoader.getCoreText("DLG_SYSTEM_LABEL"), Label.LEFT);
         add(label, layout, constraints, 0, 0, 1, 1);
 
-        // Create the system text field and add to the panel.
         systemNameTextField_ = new TextField(10);
         systemNameTextField_.addFocusListener(listener_);
         systemNameTextField_.addKeyListener(listener_);
         add(systemNameTextField_, layout, constraints, 1, 0, 1, 1);
 
-        // Create the 'User ID:' Label and add to the panel.
+        // Create the 'User ID:' Label and text field
         label = new Label(ResourceBundleLoader.getCoreText("DLG_USER_ID_LABEL"), Label.LEFT);
         add(label, layout, constraints, 0, 1, 1, 1);
 
-        // Create the user id text field and add to the panel.
         userIdTextField_ = new AS400SignonTextField();
         userIdTextField_.addFocusListener(listener_);
         userIdTextField_.addKeyListener(listener_);
         add(userIdTextField_, layout, constraints, 1, 1, 1, 1);
 
-        // Create the 'Password:' Label and add to the panel.
+        // Create the 'Password:' Label and text field
         label = new Label(ResourceBundleLoader.getCoreText("DLG_PASSWORD_LABEL"), Label.LEFT);
         add(label, layout, constraints, 0, 2, 1, 1);
 
-        // Create the password text field and add to the panel.
         passwordTextField_ = new TextField(10);
         passwordTextField_.setEchoChar('*');
         passwordTextField_.addFocusListener(listener_);
         passwordTextField_.addKeyListener(listener_);
         add(passwordTextField_, layout, constraints, 1, 2, 1, 1);
 
+        // Create additional factor label and field if requested
+        if (showAdditionalFactor)
+        {
+            label = new Label(ResourceBundleLoader.getCoreText("DLG_ADDITIONAL_FACTOR_LABEL"), Label.LEFT);
+            add(label, layout, constraints, 0, 3, 1, 1);
+
+            additionalFactorTextField_ = new TextField(10);
+            additionalFactorTextField_.addFocusListener(listener_);
+            additionalFactorTextField_.addKeyListener(listener_);
+            add(additionalFactorTextField_, layout, constraints, 1, 3, 1, 1);
+        }
+        
         // Create the default checkbox.
         defaultUserCheckbox_ = new Checkbox(ResourceBundleLoader.getCoreText("DLG_DEFAULT_PASSWORD_CHECK_BOX"));
         defaultUserCheckbox_.addFocusListener(listener_);
@@ -125,7 +140,8 @@ public class PasswordDialog extends Dialog
             // Create panels to hold the checkboxes.
             Panel centeringPanel = new Panel();
             centeringPanel.setLayout(new FlowLayout(FlowLayout.CENTER));
-            add(centeringPanel, layout, constraints, 0, 3, 2, 2);
+            add(centeringPanel, layout, constraints, 0, showAdditionalFactor ? 4 : 3, 2, 2);
+            
             Panel checkboxPanel = new Panel();
             checkboxPanel.setLayout(new GridLayout(2, 1, 2, 2));
             centeringPanel.add(checkboxPanel);
@@ -141,7 +157,8 @@ public class PasswordDialog extends Dialog
         Panel centeringPanel = new Panel();
         centeringPanel.setLayout(new FlowLayout(FlowLayout.CENTER));
         constraints.insets = new Insets(8, 8, 8, 8);
-        add(centeringPanel, layout, constraints, 0, 5, 2, 1);
+        add(centeringPanel, layout, constraints, 0, showAdditionalFactor ? 6 : 5, 2, 1);
+        
         Panel buttonPanel = new Panel();
         buttonPanel.setLayout(new GridLayout(1, 2, 8, 0));
         centeringPanel.add(buttonPanel);
@@ -152,6 +169,7 @@ public class PasswordDialog extends Dialog
         okButton_.addFocusListener(listener_);
         okButton_.addKeyListener(listener_);
         buttonPanel.add(okButton_);
+        
         cancelButton_ = new Button(ResourceBundleLoader.getCoreText("DLG_CANCEL_BUTTON"));
         cancelButton_.addActionListener(listener_);
         cancelButton_.addFocusListener(listener_);
@@ -228,6 +246,15 @@ public class PasswordDialog extends Dialog
     {
         return systemNameTextField_.getText();
     }
+    
+    /**
+    Returns the additional factor.
+    @return  The additional factor.
+    **/
+   public String getAdditionalFactor()
+   {
+       return additionalFactorTextField_ != null ? additionalFactorTextField_.getText() : "";
+   }
 
     /**
      Returns the user ID.
@@ -274,6 +301,8 @@ public class PasswordDialog extends Dialog
     boolean prompt()
     {
         passwordTextField_.setText("");
+        if (additionalFactorTextField_ != null)
+            additionalFactorTextField_.setText("");
 
         // Start the focus in the appropriate field.
         if (getSystemName().length() == 0)

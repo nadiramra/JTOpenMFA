@@ -16,7 +16,6 @@ package com.ibm.as400.access;
 import java.awt.Frame;
 import java.io.IOException;
 import java.beans.PropertyVetoException;
-import java.net.UnknownHostException;
 
 /**
  * The Toolbox's default implementation of the SignonHandler interface. The
@@ -437,7 +436,7 @@ final class ToolboxSignonHandler extends SignonHandlerAdapter
     // Solicits password-change information from the user.  Validates the information, and if valid, calls AS400.changePassword().
     private boolean handlePasswordChange(AS400 system)
     {
-        ChangePasswordDialog cpd = new ChangePasswordDialog(new Frame(), ResourceBundleLoader.getText("DLG_CHANGE_PASSWORD_TITLE"));
+        ChangePasswordDialog cpd = new ChangePasswordDialog(new Frame(), ResourceBundleLoader.getText("DLG_CHANGE_PASSWORD_TITLE"), showFactor(system));
         boolean changedPassword = false;
         boolean done = false;
 
@@ -452,6 +451,7 @@ final class ToolboxSignonHandler extends SignonHandlerAdapter
             String oldPassword = cpd.getOldPassword();
             String newPassword = cpd.getNewPassword();
             String confirmPassword = cpd.getConfirmPassword();
+            String additionalFactor = cpd.getAdditionalFactor();
             
             if (PASSWORD_TRACE)
             {
@@ -465,7 +465,7 @@ final class ToolboxSignonHandler extends SignonHandlerAdapter
                 changingPassword_ = true;
                 
                 try {
-                    system.changePassword(oldPassword, newPassword);
+                    system.changePassword(oldPassword.toCharArray(), newPassword.toCharArray(), additionalFactor.toCharArray());
                 }
                 catch (AS400SecurityException|IOException e) {
                     displayMessage(e.getMessage(), ResourceBundleLoader.getText("DLG_CHANGE_PASSWORD_TITLE"));
@@ -523,6 +523,7 @@ final class ToolboxSignonHandler extends SignonHandlerAdapter
                 String systemName = pd.getSystemName().trim();
                 String userId = pd.getUserId().trim().toUpperCase();
                 String password = pd.getPassword();
+                String factor = pd.getAdditionalFactor();
 
                 if (validateInfo(systemName, userId, password, system))
                 {
@@ -534,7 +535,8 @@ final class ToolboxSignonHandler extends SignonHandlerAdapter
                             userId_ = userId;
                             system.setUserId(userId_);
                         }
-                        if (password.length() != 0) system.setPassword(password);
+                        if (password.length() != 0) system.setPassword(password.toCharArray());
+                        system.setAdditionalAuthenticationFactor(factor.toCharArray());
 
                         // Check to see if we should set the default user.
                         // Design note: There's a slight usability exposure here, in the event that an
@@ -590,8 +592,8 @@ final class ToolboxSignonHandler extends SignonHandlerAdapter
 
     // Sets up a password dialog, to solicit system name, user ID, and password.
     private PasswordDialog setupPasswordDialog(AS400 system)
-    {
-        PasswordDialog pd = new PasswordDialog(new Frame(), ResourceBundleLoader.getText("DLG_SIGNON_TITLE"), system.isShowCheckboxes());
+    {        
+        PasswordDialog pd = new PasswordDialog(new Frame(), ResourceBundleLoader.getText("DLG_SIGNON_TITLE"), system.isShowCheckboxes(), showFactor(system));
 
         // If system name is not set.
         String systemName = system.getSystemName();
@@ -700,6 +702,17 @@ final class ToolboxSignonHandler extends SignonHandlerAdapter
             return false;
         }
 
+        return true;
+    }
+    
+    private boolean showFactor(AS400 system)
+    {
+        try {
+            return AS400.isAdditionalAuthenticationFactorAccepted(system.getSystemName(), system.isSecure());
+        } catch (Exception e) {
+            // Ignore and just show it
+        }
+        
         return true;
     }
 }
