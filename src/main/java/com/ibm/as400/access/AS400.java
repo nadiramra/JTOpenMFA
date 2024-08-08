@@ -4899,6 +4899,8 @@ public class AS400 implements Serializable, AutoCloseable
      * from dropping stale connections. The use of this method applies only to connections created after this method is
      * called. This stay-alive functionality only applies to connections to the following host servers: {@link #COMMAND
      * COMMAND}, {@link #DATABASE DATABASE}, {@link #DATAQUEUE DATAQUEUE}, {@link #FILE FILE}, and {@link #PRINT PRINT}.
+     * <P>
+     * NOTE: NOT YET IMPLEMENTED. 
      * 
      * @param milliseconds The number of milliseconds between requests to the server. If set to zero, then this
      *                     stay-alive capability will not be used.
