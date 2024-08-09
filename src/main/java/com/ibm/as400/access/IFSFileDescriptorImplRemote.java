@@ -740,6 +740,7 @@ implements IFSFileDescriptorImpl
           int userHandle = UNINITIALIZED, objectHandle = UNINITIALIZED;
           try
           {
+              // In 7.5 and prior releases, need to create user handle for IFS tables to be initialized.
               userHandle = (getSystem().getVRM() <= 0x00070500) ? system_.createUserHandle() : 0;
 
               try
@@ -1667,112 +1668,15 @@ implements IFSFileDescriptorImpl
     return serverDatastreamLevel_;
   }
   
-  //@V4A
-  public int createUserHandle() throws IOException, AS400SecurityException{
-    ClientAccessDataStream ds = null;
-    int UserHandle = UNINITIALIZED;
-    int rc;
-    byte[] ClientSeed = BinaryConverter.longToByteArray(System.currentTimeMillis());
-    byte[] ServerSeed = null;
-    try {
-      IFSUserHandleSeedReq req = new IFSUserHandleSeedReq(ClientSeed);
-      ds = (ClientAccessDataStream) server_.sendAndReceive(req);
-    }
-    catch(InterruptedException e)
-    {
-      Trace.log(Trace.ERROR, "Interrupted");
-      InterruptedIOException throwException = new InterruptedIOException(e.getMessage());
-      throwException.initCause(e);
-      throw throwException;
-    }
-    // Verify that we got a handle back.
-    if (ds instanceof IFSUserHandleSeedRep)
-    {
-      ServerSeed = ((IFSUserHandleSeedRep) ds).getSeed();
-    }
-    else if (ds instanceof IFSReturnCodeRep)
-    {
-      rc = ((IFSReturnCodeRep) ds).getReturnCode();
-      if (rc != IFSReturnCodeRep.SUCCESS)
-      {
-        Trace.log(Trace.ERROR, "IFSReturnCodeRep return code", rc);
-      }
-      throw new ExtendedIOException(rc);
-    }
-    else
-    {
-      // Unknown data stream.
-      Trace.log(Trace.ERROR, "Unknown reply data stream",
-                ds.getReqRepID());
-      throw new
-        InternalErrorException(Integer.toHexString(ds.getReqRepID()),
-                               InternalErrorException.DATA_STREAM_UNKNOWN);
-    }
-    
-    
-    rc = 0;
-    ds = null;
-    byte[] userIDbytes = SignonConverter.stringToByteArray(system_.getUserId());
-    byte[] encryptedPassword = system_.getPassword(ClientSeed, ServerSeed);
-    IFSCreateUserHandlerReq req = new IFSCreateUserHandlerReq(userIDbytes, encryptedPassword);
-    try {
-      ds = (ClientAccessDataStream) server_.sendAndReceive(req);
-    } catch (InterruptedException e) {
-      Trace.log(Trace.ERROR, "Interrupted");
-      InterruptedIOException throwException = new InterruptedIOException(e.getMessage());
-      throwException.initCause(e);
-      throw throwException;
-    }
-
-    // Verify the reply.
-    if (ds instanceof IFSCreateUserHandleRep)
-    {
-      rc = ((IFSCreateUserHandleRep)ds).getReturnCode();
-      if (rc != IFSReturnCodeRep.SUCCESS)
-      {
-        Trace.log(Trace.ERROR, "IFSCreateUserHandleRep return code", rc);
-      }
-      UserHandle = ((IFSCreateUserHandleRep) ds).getHandle();
-      
-    }
-    else if (ds instanceof IFSReturnCodeRep)
-    {
-      rc = ((IFSReturnCodeRep) ds).getReturnCode();
-      if (rc != IFSReturnCodeRep.SUCCESS)
-      {
-        Trace.log(Trace.ERROR, "IFSReturnCodeRep return code", rc);
-      }
-      throw new ExtendedIOException(rc);
-    }
-    else
-    {
-      // Unknown data stream.
-      Trace.log(Trace.ERROR, "Unknown reply data stream",
-                ds.getReqRepID());
-      throw new
-        InternalErrorException(InternalErrorException.DATA_STREAM_UNKNOWN,
-                               Integer.toHexString(ds.getReqRepID()),null);
-    }
-    return UserHandle;
-  
-  }
-  
-  public void freeUserHandle(int userHandle) throws IOException, AS400SecurityException{
-    IFSFreeUserHandlerReq req = new IFSFreeUserHandlerReq(userHandle);
-    server_.send(req);
-  }
-  
   public void freeHandle(int objectHandle) throws IOException, AS400SecurityException{
     IFSFreeHandleReq req = new IFSFreeHandleReq(objectHandle);
     server_.send(req);
   }
   
-   //@AC7A Start
   public int getASP(boolean isDirectory) throws IOException, AS400SecurityException {
       isDirectory_ = isDirectory;
       return getASP();
   }
-  //@AC7A End
   
   public int getASP() throws IOException, AS400SecurityException 
   {
@@ -1790,6 +1694,7 @@ implements IFSFileDescriptorImpl
           int userHandle = UNINITIALIZED, objectHandle = UNINITIALIZED;
           try
           {
+              // In 7.5 and prior releases, need to create user handle for IFS tables to be initialized.
               userHandle = (getSystem().getVRM() <= 0x00070500) ? system_.createUserHandle() : 0;
               
               try
@@ -1868,6 +1773,7 @@ implements IFSFileDescriptorImpl
       int userHandle = UNINITIALIZED, objectHandle = UNINITIALIZED;
       try
       {
+          // In 7.5 and prior releases, need to create user handle for IFS tables to be initialized.
           userHandle = (getSystem().getVRM() <= 0x00070500) ? system_.createUserHandle() : 0;
           
           try

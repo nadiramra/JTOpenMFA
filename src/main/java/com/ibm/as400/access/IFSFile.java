@@ -1274,7 +1274,11 @@ public class IFSFile
           if (impl_ == null)
               chooseImpl();
 
-          if (this.isDirectory() && getSystem().getAuthenticationScheme()== AS400.AUTHENTICATION_SCHEME_PASSWORD)
+          // In 7.5 and prior releases, need to create user handle for IFS tables to be initialized.
+          // Not sure why only for directories. 
+          if (this.isDirectory() 
+                && (getSystem().getAuthenticationScheme()== AS400.AUTHENTICATION_SCHEME_PASSWORD
+                       || getSystem().getAuthenticationScheme()== AS400.AUTHENTICATION_SCHEME_GSS_TOKEN))
               return impl_.getCCSIDByUserHandle();
 
           return impl_.getCCSID(true);
@@ -1511,7 +1515,11 @@ public class IFSFile
       if (impl_ == null)
           chooseImpl();
     
-      if (this.isDirectory() && getSystem().getAuthenticationScheme() == AS400.AUTHENTICATION_SCHEME_PASSWORD)
+      // In 7.5 and prior releases, need to create user handle for IFS tables to be initialized.
+      // Not sure why only for directories. 
+      if (this.isDirectory() 
+                && (getSystem().getAuthenticationScheme()== AS400.AUTHENTICATION_SCHEME_PASSWORD
+                       || getSystem().getAuthenticationScheme()== AS400.AUTHENTICATION_SCHEME_GSS_TOKEN))
           return impl_.getOwnerNameByUserHandle(false);
 
       String pathUpperCase = path_.toUpperCase(system_.getLocale());

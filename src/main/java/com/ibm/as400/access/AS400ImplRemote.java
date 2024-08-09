@@ -175,8 +175,6 @@ public class AS400ImplRemote implements AS400Impl
   // Additional authentication factor. We have to hold on to it because it may be timed, and thus can be reused. 
   private byte[] additionalAuthFactor_;
   
-  private int UserHandle2_ = UNINITIALIZED;
-
   private static final String CLASSNAME = "com.ibm.as400.access.AS400ImplRemote";
 
   static {
@@ -646,68 +644,103 @@ public class AS400ImplRemote implements AS400Impl
   // @SAA Create user handle for the connection
   public int createUserHandle() throws AS400SecurityException, IOException
   {
-      if (userHandle_ != UNINITIALIZED && credVault_.getType() != AS400.AUTHENTICATION_SCHEME_GSS_TOKEN)
+      if (userHandle_ != UNINITIALIZED)
           return userHandle_;
-    
-      if (credVault_.getType() == AS400.AUTHENTICATION_SCHEME_GSS_TOKEN)
-          return createUserHandle2();
-    
-      ClientAccessDataStream ds = null;
-      int UserHandle = UNINITIALIZED;
+      
+      int authScheme = credVault_.getType();
+      
+      if (authScheme != AS400.AUTHENTICATION_SCHEME_GSS_TOKEN && authScheme != AS400.AUTHENTICATION_SCHEME_PASSWORD)
+          return UNINITIALIZED;
 
-      AS400Server connectedServer = getConnectedServer(new int[] { AS400.FILE });
-      if (connectedServer != null)
+      // Do not want to create more than one user handle
+      synchronized (this)
       {
-          byte[] ClientSeed = BinaryConverter.longToByteArray(System.currentTimeMillis());
-          byte[] ServerSeed = null;
-          try 
-          {
-              IFSUserHandleSeedReq req = new IFSUserHandleSeedReq(ClientSeed);
-              ds = (ClientAccessDataStream) connectedServer.sendAndReceive(req);
-          } 
-          catch (InterruptedException e)
-          {
-              Trace.log(Trace.ERROR, "Interrupted");
-              InterruptedIOException throwException = new InterruptedIOException( e.getMessage());
-              throwException.initCause(e);
-              throw throwException;
-          }
+          if (userHandle_ != UNINITIALIZED)
+              return userHandle_;
           
-          // Verify that we got a handle back.
+          AS400Server connectedServer = getConnectedServer(new int[] { AS400.FILE });
+          if (connectedServer == null)
+              return UNINITIALIZED;
+          
+          ClientAccessDataStream ds = null;
           int rc = 0;
-          if (ds instanceof IFSUserHandleSeedRep)
-              ServerSeed = ((IFSUserHandleSeedRep) ds).getSeed();
-          else if (ds instanceof IFSReturnCodeRep)
+          
+          if (authScheme == AS400.AUTHENTICATION_SCHEME_GSS_TOKEN)
           {
-              rc = ((IFSReturnCodeRep) ds).getReturnCode();
-              if (rc != IFSReturnCodeRep.SUCCESS)
-                  Trace.log(Trace.ERROR, "IFSReturnCodeRep return code", rc);
-              throw new ExtendedIOException(rc);
+              try
+              {
+                  byte[] authenticationBytes = (gssCredential_ == null) 
+                          ? TokenManager.getGSSToken(systemName_, gssName_)
+                          : TokenManager2.getGSSToken(systemName_, gssCredential_);
+                  
+                  IFSUserHandle2Req req = new IFSUserHandle2Req(authenticationBytes, aafIndicator_ ? additionalAuthFactor_ : null);
+                  ds = (ClientAccessDataStream) connectedServer.sendAndReceive(req);
+              }
+              catch (InterruptedException e)
+              {
+                  Trace.log(Trace.ERROR, "Interrupted");
+                  InterruptedIOException throwException = new InterruptedIOException(e.getMessage());
+                  throwException.initCause(e);
+                  throw throwException;
+              }
+              catch (Throwable e) {
+                  Trace.log(Trace.ERROR, "Error retrieving GSSToken:", e);
+                  throw new AS400SecurityException(AS400SecurityException.KERBEROS_TICKET_NOT_VALID_RETRIEVE, e);
+              }
           }
           else
           {
-              // Unknown data stream.
-              Trace.log(Trace.ERROR, "Unknown reply data stream", ds.getReqRepID());
-              throw new InternalErrorException(Integer.toHexString(ds.getReqRepID()), InternalErrorException.DATA_STREAM_UNKNOWN);
+              // Password authentication scheme
+              
+              byte[] ClientSeed = BinaryConverter.longToByteArray(System.currentTimeMillis());
+              byte[] ServerSeed = null;
+              try 
+              {
+                  IFSUserHandleSeedReq req = new IFSUserHandleSeedReq(ClientSeed);
+                  ds = (ClientAccessDataStream) connectedServer.sendAndReceive(req);
+              } 
+              catch (InterruptedException e)
+              {
+                  Trace.log(Trace.ERROR, "Interrupted");
+                  InterruptedIOException throwException = new InterruptedIOException( e.getMessage());
+                  throwException.initCause(e);
+                  throw throwException;
+              }
+              
+              // Verify that we got a handle back.
+              if (ds instanceof IFSUserHandleSeedRep)
+                  ServerSeed = ((IFSUserHandleSeedRep) ds).getSeed();
+              else if (ds instanceof IFSReturnCodeRep)
+              {
+                  rc = ((IFSReturnCodeRep) ds).getReturnCode();
+                  if (rc != IFSReturnCodeRep.SUCCESS) Trace.log(Trace.ERROR, "IFSReturnCodeRep return code", rc);
+                  throw new ExtendedIOException(rc);
+              }
+              else
+              {
+                  // Unknown data stream.
+                  Trace.log(Trace.ERROR, "Unknown reply data stream", ds.getReqRepID());
+                  throw new InternalErrorException(Integer.toHexString(ds.getReqRepID()), InternalErrorException.DATA_STREAM_UNKNOWN);
+              }
+    
+              rc = 0;
+              ds = null;
+              byte[] userIDbytes = SignonConverter.stringToByteArray(userId_);
+              byte[] encryptedPassword = getPassword(ClientSeed, ServerSeed);
+              IFSCreateUserHandlerReq req = new IFSCreateUserHandlerReq(userIDbytes, encryptedPassword, aafIndicator_ ? additionalAuthFactor_ : null);
+              
+              try {
+                  ds = (ClientAccessDataStream) connectedServer.sendAndReceive(req);
+              }
+              catch (InterruptedException e)
+              {
+                  Trace.log(Trace.ERROR, "Interrupted");
+                  InterruptedIOException throwException = new InterruptedIOException( e.getMessage());
+                  throwException.initCause(e);
+                  throw throwException;
+              }
           }
-
-          rc = 0;
-          ds = null;
-          byte[] userIDbytes = SignonConverter.stringToByteArray(userId_);
-          byte[] encryptedPassword = getPassword(ClientSeed, ServerSeed);
-          IFSCreateUserHandlerReq req = new IFSCreateUserHandlerReq(userIDbytes, encryptedPassword);
           
-          try {
-              ds = (ClientAccessDataStream) connectedServer.sendAndReceive(req);
-          }
-          catch (InterruptedException e)
-          {
-              Trace.log(Trace.ERROR, "Interrupted");
-              InterruptedIOException throwException = new InterruptedIOException( e.getMessage());
-              throwException.initCause(e);
-              throw throwException;
-          }
-
           // Verify the reply.
           if (ds instanceof IFSCreateUserHandleRep)
           {
@@ -717,13 +750,12 @@ public class AS400ImplRemote implements AS400Impl
                   Trace.log(Trace.ERROR, "IFSCreateUserHandleRep return code", rc);
                   throw new ExtendedIOException(rc);
               }
-              UserHandle = ((IFSCreateUserHandleRep) ds).getHandle();
+              setUserHandle(((IFSCreateUserHandleRep) ds).getHandle());
           }
           else if (ds instanceof IFSReturnCodeRep)
           {
               rc = ((IFSReturnCodeRep) ds).getReturnCode();
-              if (rc != IFSReturnCodeRep.SUCCESS)
-                  Trace.log(Trace.ERROR, "IFSReturnCodeRep return code", rc);
+              if (rc != IFSReturnCodeRep.SUCCESS) Trace.log(Trace.ERROR, "IFSReturnCodeRep return code", rc);
               throw new ExtendedIOException(rc);
           }
           else
@@ -734,8 +766,7 @@ public class AS400ImplRemote implements AS400Impl
           }
       }
       
-      setUserHandle(UserHandle);
-      return UserHandle;
+      return userHandle_;
   }
 
   public int getUserHandle() {
@@ -3331,7 +3362,7 @@ public class AS400ImplRemote implements AS400Impl
       aafIndicator_ = parentImpl.aafIndicator_;
       proxySeed_ = parentImpl.proxySeed_;
       remoteSeed_ = parentImpl.remoteSeed_;
-      userHandle_ = parentImpl.userHandle_;
+      userHandle_ = UNINITIALIZED;
       serverSeed_ = parentImpl.serverSeed_;
       clientSeed_ = parentImpl.clientSeed_;
       hostcnn_serverSeed_ = parentImpl.hostcnn_serverSeed_;
@@ -4971,63 +5002,6 @@ public class AS400ImplRemote implements AS400Impl
     return bidiStringType_;
   }
   // @Bidi-HCG3 end
-  
-  //@ACAA Start
-  public int createUserHandle2() throws AS400SecurityException, IOException
-  {
-      if (UserHandle2_ != UNINITIALIZED)
-          return UserHandle2_;
-          
-      ClientAccessDataStream ds = null;
-
-      AS400Server connectedServer = getConnectedServer(new int[] { AS400.FILE });
-      if (connectedServer != null)
-      {
-          try
-          {
-              byte[] authenticationBytes = (gssCredential_ == null) 
-                      ? TokenManager.getGSSToken(systemName_, gssName_)
-                      : TokenManager2.getGSSToken(systemName_, gssCredential_);
-              
-              IFSUserHandle2Req req = new IFSUserHandle2Req(authenticationBytes);
-              ds = (ClientAccessDataStream) connectedServer.sendAndReceive(req);
-          } catch (InterruptedException e) {
-              Trace.log(Trace.ERROR, "Interrupted");
-              InterruptedIOException throwException = new InterruptedIOException(e.getMessage());
-              throwException.initCause(e);
-              throw throwException;
-          } catch (Throwable e) {
-              Trace.log(Trace.ERROR, "Error retrieving GSSToken:", e);
-              throw new AS400SecurityException(AS400SecurityException.KERBEROS_TICKET_NOT_VALID_RETRIEVE, e);
-          }
-          
-          int rc = 0;
-          // Verify the reply.
-          if (ds instanceof IFSCreateUserHandleRep)
-          {
-              rc = ((IFSCreateUserHandleRep) ds).getReturnCode();
-              if (rc != IFSReturnCodeRep.SUCCESS) Trace.log(Trace.ERROR, "IFSCreateUserHandleRep return code", rc);
-
-              UserHandle2_ = ((IFSCreateUserHandleRep) ds).getHandle();
-          }
-          else if (ds instanceof IFSReturnCodeRep)
-          {
-              rc = ((IFSReturnCodeRep) ds).getReturnCode();
-              if (rc != IFSReturnCodeRep.SUCCESS) Trace.log(Trace.ERROR, "IFSReturnCodeRep return code", rc);
-
-              throw new ExtendedIOException(rc);
-          }
-          else
-          {
-              // Unknown data stream.
-              Trace.log(Trace.ERROR, "Unknown reply data stream", ds.getReqRepID());
-              throw new InternalErrorException(InternalErrorException.DATA_STREAM_UNKNOWN, Integer.toHexString(ds.getReqRepID()), null);
-          }
-      }
-      
-      setUserHandle(UserHandle2_);
-      return UserHandle2_;
-  }
   
   //Generate salt for password level 4
   /*
